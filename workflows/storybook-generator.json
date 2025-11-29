@@ -1,0 +1,1002 @@
+{
+  "name": "Storybook Generator - Full Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-storybook",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-input",
+      "name": "1. Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "storybook-generator-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "extract-text",
+              "name": "storyText",
+              "value": "={{ $json.body.storyText }}",
+              "type": "string"
+            },
+            {
+              "id": "extract-settings",
+              "name": "settings",
+              "value": "={{ $json.body.settings }}",
+              "type": "object"
+            },
+            {
+              "id": "extract-age",
+              "name": "targetAge",
+              "value": "={{ $json.body.settings.targetAge }}",
+              "type": "number"
+            },
+            {
+              "id": "extract-pagecount",
+              "name": "desiredPageCount",
+              "value": "={{ $json.body.settings.desiredPageCount || 10 }}",
+              "type": "number"
+            },
+            {
+              "id": "extract-intensity",
+              "name": "intensity",
+              "value": "={{ $json.body.settings.harshness || 5 }}",
+              "type": "number"
+            },
+            {
+              "id": "extract-style",
+              "name": "aestheticStyle",
+              "value": "={{ $json.body.settings.aestheticStyle || 'watercolor children\\'s book illustration' }}",
+              "type": "string"
+            },
+            {
+              "id": "extract-notes",
+              "name": "freeformNotes",
+              "value": "={{ $json.body.settings.freeformNotes || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "story-id",
+              "name": "storyId",
+              "value": "={{ $json.body.storyId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-inputs",
+      "name": "Extract Inputs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash",
+          "mode": "list"
+        },
+        "prompt": {
+          "value": "=You are an expert literary analyst. Analyze this story and provide a deep understanding of its narrative structure.\n\nSTORY TEXT:\n{{ $json.storyText.substring(0, 8000) }}\n\nTARGET AUDIENCE: {{ $json.targetAge }}-year-old reader\n\nANALYZE AND RETURN JSON:\n{\n  \"title\": \"Story title or best guess\",\n  \"theme\": \"Core theme in 1-2 sentences\",\n  \"emotionalArc\": \"Description of the emotional journey\",\n  \"protagonistJourney\": \"What the main character learns or achieves\",\n  \"keyMoments\": [\n    \"List of 8-12 most important/visual moments in the story\"\n  ],\n  \"tone\": \"Overall tone (e.g., whimsical, adventurous, heartwarming)\",\n  \"setting\": \"Primary setting(s) description\",\n  \"ageAppropriatenessNotes\": \"Any content considerations for the target age\"\n}\n\nReturn ONLY valid JSON.",
+          "type": "expression"
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "story-analyzer",
+      "name": "2. Story Analyzer Agent",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [440, 300],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      },
+      "notes": "ADJUSTABLE: Edit this prompt to change how the AI interprets story structure. Modify keyMoments count to get more/fewer scene options."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the story analysis\nconst analysisText = $input.first().json.text || $input.first().json.response;\nlet analysis;\ntry {\n  const jsonMatch = analysisText.match(/\\{[\\s\\S]*\\}/);\n  analysis = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  analysis = { error: 'Failed to parse analysis', raw: analysisText };\n}\n\n// Get settings from previous node\nconst prevData = $('Extract Inputs').first().json;\n\nreturn [{\n  json: {\n    ...prevData,\n    analysis\n  }\n}];"
+      },
+      "id": "parse-analysis",
+      "name": "Parse Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash",
+          "mode": "list"
+        },
+        "prompt": {
+          "value": "=You are selecting scenes for a {{ $json.desiredPageCount }}-page children's picture book.\n\nSTORY ANALYSIS:\nTitle: {{ $json.analysis.title }}\nTheme: {{ $json.analysis.theme }}\nEmotional Arc: {{ $json.analysis.emotionalArc }}\nKey Moments: {{ JSON.stringify($json.analysis.keyMoments) }}\n\nTARGET: {{ $json.targetAge }}-year-old reader\nPAGE COUNT: Exactly {{ $json.desiredPageCount }} pages\nINTENSITY: {{ $json.intensity }}/10\n\nSCENE SELECTION PRINCIPLES:\n1. NARRATIVE ESSENTIALS - Include pivotal plot moments\n2. EMOTIONAL PEAKS - Joy, discovery, challenge, resolution\n3. VISUAL IMPACT - Strong visual potential and variety\n4. CHARACTER DEVELOPMENT - Show growth and relationships\n5. PACING - Balance action with reflection\n6. ICONIC MOMENTS - For known stories, include expected scenes\n7. AGE APPROPRIATENESS - Resonate with target age\n8. VISUAL VARIETY - Mix wide shots, close-ups, different compositions\n\nHANDLING STORY LENGTH:\n- SHORT STORY: Break moments into multiple pages, expand emotional beats\n- LONG STORY: Combine related moments, focus on high-impact scenes\n\nReturn EXACTLY {{ $json.desiredPageCount }} scenes as JSON:\n{\n  \"scenes\": [\n    {\n      \"pageNumber\": 1,\n      \"moment\": \"The key moment this page captures\",\n      \"emotionalBeat\": \"What the reader should feel\",\n      \"visualPotential\": \"Why this moment is visually interesting\",\n      \"cameraAngle\": \"wide shot | medium shot | close-up\"\n    }\n  ],\n  \"storyArcSummary\": [\n    \"First major beat (one sentence)\",\n    \"Second major beat (one sentence)\",\n    \"Third major beat (one sentence)\",\n    \"Resolution/ending (one sentence)\"\n  ]\n}\n\nReturn ONLY valid JSON with exactly {{ $json.desiredPageCount }} scenes.",
+          "type": "expression"
+        },
+        "options": {
+          "temperature": 0.8
+        }
+      },
+      "id": "scene-selector",
+      "name": "3. Scene Selector Agent",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [880, 300],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      },
+      "notes": "ADJUSTABLE: This is the 'narrative mapper' - edit to change which moments get pages. Modify the 8 principles to change selection criteria."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the scene selection\nconst sceneText = $input.first().json.text || $input.first().json.response;\nlet sceneData;\ntry {\n  const jsonMatch = sceneText.match(/\\{[\\s\\S]*\\}/);\n  sceneData = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  sceneData = { error: 'Failed to parse scenes', raw: sceneText };\n}\n\n// Get data from previous nodes\nconst prevData = $('Parse Analysis').first().json;\n\nreturn [{\n  json: {\n    ...prevData,\n    scenes: sceneData.scenes || [],\n    storyArcSummary: sceneData.storyArcSummary || []\n  }\n}];"
+      },
+      "id": "parse-scenes",
+      "name": "Parse Scenes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash",
+          "mode": "list"
+        },
+        "prompt": {
+          "value": "=You are writing captions for a {{ $json.desiredPageCount }}-page children's picture book.\n\nTARGET AGE: {{ $json.targetAge }} years old\nSTORY THEME: {{ $json.analysis.theme }}\nTONE: {{ $json.analysis.tone }}\n\nAGE-APPROPRIATE LANGUAGE GUIDELINES:\n{{ $json.targetAge <= 5 ? '- Very simple language, basic concepts, short sentences (5-8 words)' : '' }}\n{{ $json.targetAge > 5 && $json.targetAge <= 8 ? '- Simple but engaging sentences, adventure vocabulary, 8-12 words per sentence' : '' }}\n{{ $json.targetAge > 8 && $json.targetAge <= 12 ? '- More complex sentences, richer vocabulary, can handle nuance, 10-15 words' : '' }}\n{{ $json.targetAge > 12 ? '- Sophisticated language, nuanced themes, literary quality, varied sentence length' : '' }}\n\nSCENES TO CAPTION:\n{{ JSON.stringify($json.scenes, null, 2) }}\n\nFor each scene, write a caption that:\n1. Is age-appropriate for a {{ $json.targetAge }}-year-old\n2. Captures the emotional moment\n3. Flows naturally when read aloud\n4. Avoids spoiling future events\n5. Works standalone but connects to the larger story\n\nReturn JSON:\n{\n  \"captions\": [\n    {\n      \"pageNumber\": 1,\n      \"caption\": \"The actual caption text to display\"\n    }\n  ]\n}\n\nReturn ONLY valid JSON.",
+          "type": "expression"
+        },
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "caption-writer",
+      "name": "4. Caption Writer Agent",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [1320, 300],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      },
+      "notes": "ADJUSTABLE: Edit the age-appropriate language guidelines to change vocabulary complexity. Modify caption style rules to change tone."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse captions\nconst captionText = $input.first().json.text || $input.first().json.response;\nlet captionData;\ntry {\n  const jsonMatch = captionText.match(/\\{[\\s\\S]*\\}/);\n  captionData = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  captionData = { error: 'Failed to parse captions', raw: captionText };\n}\n\nconst prevData = $('Parse Scenes').first().json;\n\n// Merge captions into scenes\nconst pagesWithCaptions = prevData.scenes.map((scene, idx) => {\n  const caption = captionData.captions?.find(c => c.pageNumber === scene.pageNumber);\n  return {\n    ...scene,\n    caption: caption?.caption || `Page ${scene.pageNumber}`\n  };\n});\n\nreturn [{\n  json: {\n    ...prevData,\n    pages: pagesWithCaptions\n  }\n}];"
+      },
+      "id": "parse-captions",
+      "name": "Parse Captions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash",
+          "mode": "list"
+        },
+        "prompt": {
+          "value": "=You are identifying characters for a children's picture book to ensure visual consistency.\n\nSTORY TEXT:\n{{ $json.storyText.substring(0, 6000) }}\n\nPAGES/SCENES:\n{{ JSON.stringify($json.pages, null, 2) }}\n\nExtract ALL characters that appear in the story. For each character, provide:\n1. PRECISE visual description - physical features, clothing, colors, props\n2. Their role in the story\n3. Approximate age or size relative to others\n4. Any distinctive visual markers that must remain consistent\n\nReturn JSON:\n{\n  \"characters\": [\n    {\n      \"name\": \"Character Name\",\n      \"description\": \"PRECISE visual description: [hair color/style], [eye color], [skin tone], [body type], [clothing with specific colors], [distinctive props/accessories], [approximate age/size]\",\n      \"role\": \"main\" | \"supporting\" | \"background\",\n      \"keyFeatures\": [\"brown curly hair\", \"red coat\", \"round glasses\"],\n      \"appearsOnPages\": [1, 3, 5, 7]\n    }\n  ]\n}\n\nIMPORTANT:\n- First 2 characters should be 'main' role\n- Next 3 characters should be 'supporting' role  \n- Rest are 'background'\n- Be VERY specific about colors and visual details\n- These descriptions will be used to maintain consistency across all images\n\nReturn ONLY valid JSON.",
+          "type": "expression"
+        },
+        "options": {
+          "temperature": 0.5
+        }
+      },
+      "id": "character-extractor",
+      "name": "5. Character Extractor Agent",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [1760, 300],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      },
+      "notes": "ADJUSTABLE: Edit to change how detailed character descriptions are. Modify keyFeatures requirements to track different visual elements."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse characters\nconst charText = $input.first().json.text || $input.first().json.response;\nlet charData;\ntry {\n  const jsonMatch = charText.match(/\\{[\\s\\S]*\\}/);\n  charData = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  charData = { error: 'Failed to parse characters', raw: charText };\n}\n\nconst prevData = $('Parse Captions').first().json;\n\nreturn [{\n  json: {\n    ...prevData,\n    characters: charData.characters || []\n  }\n}];"
+      },
+      "id": "parse-characters",
+      "name": "Parse Characters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create Style Bible from settings\nconst data = $input.first().json;\nconst style = (data.aestheticStyle || '').toLowerCase();\n\n// Extract art style\nfunction extractArtStyle(s) {\n  if (s.includes('watercolor')) return 'watercolor illustration';\n  if (s.includes('cartoon')) return 'cartoon style';\n  if (s.includes('digital')) return 'digital art';\n  if (s.includes('sketch')) return 'sketch illustration';\n  if (s.includes('pixar') || s.includes('3d')) return 'Pixar-style 3D render';\n  if (s.includes('paper') || s.includes('cutout')) return 'paper cutout style';\n  return 'children\\'s book illustration style';\n}\n\n// Extract color palette\nfunction extractColorPalette(s) {\n  if (s.includes('warm')) return 'warm, inviting colors';\n  if (s.includes('pastel')) return 'soft pastel tones';\n  if (s.includes('bright')) return 'bright, cheerful colors';\n  if (s.includes('muted')) return 'muted, gentle tones';\n  return 'child-friendly color palette';\n}\n\n// Extract lighting\nfunction extractLighting(s) {\n  if (s.includes('soft')) return 'soft, diffused lighting';\n  if (s.includes('golden')) return 'warm golden hour lighting';\n  if (s.includes('bright')) return 'bright, even lighting';\n  return 'gentle, natural lighting';\n}\n\n// Visual density by age\nfunction getVisualDensity(age) {\n  if (age <= 5) return 'Simple, bold elements, large shapes, minimal background, high contrast';\n  if (age <= 8) return 'Moderate detail, engaging backgrounds, balanced complexity';\n  if (age <= 12) return 'Rich, intricate details, layered compositions, complex backgrounds';\n  return 'Advanced visual complexity, mature artistic techniques';\n}\n\nconst styleBible = {\n  artStyle: extractArtStyle(style),\n  colorPalette: extractColorPalette(style),\n  lighting: extractLighting(style),\n  composition: 'child-friendly perspective, clear focal points, intricate backgrounds',\n  visualDensity: getVisualDensity(data.targetAge),\n  doNots: [\n    'dark shadows',\n    'scary elements', \n    'violent imagery',\n    'any text, captions, or typography in the image',\n    'speech bubbles',\n    'signs with readable text'\n  ]\n};\n\nreturn [{\n  json: {\n    ...data,\n    styleBible\n  }\n}];"
+      },
+      "id": "style-bible-creator",
+      "name": "6. Style Bible Creator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 300],
+      "notes": "ADJUSTABLE: Edit the extractArtStyle, extractColorPalette, extractLighting functions to change style mappings. Modify doNots array to add/remove restrictions."
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "stories"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.storyId }}",
+            "source_text": "={{ $json.storyText }}",
+            "settings": "={{ JSON.stringify($json.settings) }}",
+            "theme": "={{ $json.analysis.theme }}",
+            "status": "planning"
+          }
+        },
+        "options": {
+          "onConflict": "update"
+        }
+      },
+      "id": "save-story-supabase",
+      "name": "7. Save to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2420, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "characters"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "save-characters-supabase",
+      "name": "Save Characters",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2420, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare characters for loop\nconst data = $input.first().json;\nconst characters = data.characters || [];\n\nreturn characters.map((char, idx) => ({\n  json: {\n    characterIndex: idx,\n    character: char,\n    storyId: data.storyId,\n    aestheticStyle: data.aestheticStyle,\n    targetAge: data.targetAge,\n    styleBible: data.styleBible,\n    totalCharacters: characters.length,\n    // Pass through all data for later\n    allData: data\n  }\n}));"
+      },
+      "id": "prep-character-loop",
+      "name": "Prep Character Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "character-loop",
+      "name": "8. Character Portrait Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [2860, 300],
+      "notes": "ADJUSTABLE: Change batchSize to process more characters in parallel (may hit rate limits)."
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash-preview-image-generation",
+          "mode": "list"
+        },
+        "prompt": {
+          "value": "=Create a character reference sheet for children's book illustration:\n\nCHARACTER: {{ $json.character.name }}\nROLE: {{ $json.character.role }}\nDESCRIPTION: {{ $json.character.description }}\nKEY FEATURES: {{ $json.character.keyFeatures?.join(', ') || 'As described' }}\n\nSTYLE: {{ $json.aestheticStyle }}\nART DIRECTION: {{ $json.styleBible.artStyle }}\n\nCREATE:\n- Front-facing portrait showing full character design\n- Clear, consistent lighting\n- Neutral background (white or light parchment)\n- Professional children's book illustration quality\n- NO TEXT OR LABELS in the image\n\nUNIFIED STYLE (Critical):\n- All characters must share the EXACT same rendering style\n- Match the art style: {{ $json.styleBible.artStyle }}\n- Color palette: {{ $json.styleBible.colorPalette }}\n- Lighting: {{ $json.styleBible.lighting }}\n\nGenerate a single character reference image.",
+          "type": "expression"
+        },
+        "options": {
+          "responseFormat": "image"
+        }
+      },
+      "id": "generate-character-portrait",
+      "name": "Generate Portrait",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [3080, 300],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      },
+      "notes": "ADJUSTABLE: Edit the prompt to change portrait style, angles, or add more reference views."
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 2
+      },
+      "id": "wait-between-characters",
+      "name": "Rate Limit Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [3300, 300],
+      "notes": "ADJUSTABLE: Increase wait time if hitting Gemini rate limits."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all character portraits\nconst items = $input.all();\nconst allData = items[0]?.json?.allData || {};\n\nconst characterRefs = items.map(item => ({\n  name: item.json.character?.name,\n  role: item.json.character?.role,\n  description: item.json.character?.description,\n  referenceImage: item.json.imageData || item.json.response\n}));\n\nreturn [{\n  json: {\n    ...allData,\n    characterReferences: characterRefs\n  }\n}];"
+      },
+      "id": "aggregate-characters",
+      "name": "Aggregate Characters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3520, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare pages for illustration loop\nconst data = $input.first().json;\nconst pages = data.pages || [];\n\nreturn pages.map((page, idx) => ({\n  json: {\n    pageIndex: idx,\n    page: page,\n    storyId: data.storyId,\n    aestheticStyle: data.aestheticStyle,\n    targetAge: data.targetAge,\n    styleBible: data.styleBible,\n    characterReferences: data.characterReferences,\n    totalPages: pages.length,\n    intensity: data.intensity,\n    // Pass through all data\n    allData: data\n  }\n}));"
+      },
+      "id": "prep-page-loop",
+      "name": "Prep Page Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3740, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "page-loop",
+      "name": "9. Page Illustrator Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [3960, 300],
+      "notes": "ADJUSTABLE: Change batchSize to process pages in parallel (costs more, faster)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the comprehensive page illustration prompt\nconst data = $input.first().json;\nconst page = data.page;\nconst pageIndex = data.pageIndex;\n\n// Camera angle rotation (or use the scene's specified angle)\nconst defaultAngle = pageIndex % 3 === 0 ? 'wide shot' : \n                     pageIndex % 2 === 0 ? 'medium shot' : 'close-up';\nconst cameraAngle = page.cameraAngle || defaultAngle;\n\nconst cameraDescriptions = {\n  'wide shot': 'Wide establishing shot showing full scene and environment, giving context and scale',\n  'medium shot': 'Medium shot framing characters from waist up, balancing character detail with environment',\n  'close-up': 'Close-up shot focusing on facial expressions and emotional details'\n};\n\n// Build character reference section\nconst charRefs = (data.characterReferences || [])\n  .filter(c => c.referenceImage)\n  .map(c => `- ${c.name}: MATCH REFERENCE IMAGE EXACTLY - same facial features, hair, clothing`)\n  .join('\\n');\n\n// Build the full prompt\nconst prompt = `SCENE OBJECTIVE: ${page.moment || page.caption}\n\nCAPTION: \"${page.caption}\"\n\nCOMPOSITION:\n- Camera: ${cameraDescriptions[cameraAngle] || cameraDescriptions['medium shot']}\n- Layout: FULL-PAGE illustration filling entire canvas edge-to-edge\n- Create depth with foreground, midground, and background layers\n- Use rule of thirds for dynamic composition\n\nINTENSITY LEVEL: ${data.intensity}/10\n${data.intensity >= 7 ? '- Make this scene DRAMATIC and emotionally intense' : ''}\n${data.intensity >= 4 && data.intensity < 7 ? '- Moderately engaging with some tension' : ''}\n${data.intensity < 4 ? '- Keep this scene gentle and calm' : ''}\n\nNARRATIVE ENRICHMENT:\n- Fill the entire canvas with meaningful visual content\n- Include period-accurate historical/cultural details\n- Add background elements that reward careful observation\n- Every detail should serve the narrative\n- Include subtle visual storytelling in the background\n\nCHARACTER CONSISTENCY (CRITICAL):\n${charRefs || 'No specific character references'}\n\nSTYLE REQUIREMENTS:\n- Art Style: ${data.styleBible?.artStyle || data.aestheticStyle}\n- Color Palette: ${data.styleBible?.colorPalette || 'child-friendly'}\n- Lighting: ${data.styleBible?.lighting || 'natural lighting'}\n- Visual Density: ${data.styleBible?.visualDensity || 'age-appropriate'}\n- Professional children's book illustration quality\n\nTECHNICAL SPECS:\n- FULL-PAGE illustration (no text space)\n- DO NOT include any text, captions, or typography in the image\n- High resolution, publication-ready\n- Safe for ages 3-12\n- Rich, detailed backgrounds\n\nGenerate the illustration for page ${pageIndex + 1}.`;\n\nreturn [{\n  json: {\n    ...data,\n    illustrationPrompt: prompt\n  }\n}];"
+      },
+      "id": "build-page-prompt",
+      "name": "Build Page Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4180, 300],
+      "notes": "ADJUSTABLE: This is where composition rules live. Edit camera angle logic, narrative enrichment instructions, or intensity mappings."
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash-preview-image-generation",
+          "mode": "list"
+        },
+        "prompt": {
+          "value": "={{ $json.illustrationPrompt }}",
+          "type": "expression"
+        },
+        "options": {
+          "responseFormat": "image"
+        }
+      },
+      "id": "generate-page-image",
+      "name": "Generate Page Image",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [4400, 300],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 3
+      },
+      "id": "wait-between-pages",
+      "name": "Rate Limit Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [4620, 300],
+      "notes": "ADJUSTABLE: Increase if hitting Gemini rate limits on image generation."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all generated pages\nconst items = $input.all();\nconst allData = items[0]?.json?.allData || {};\n\nconst generatedPages = items.map((item, idx) => ({\n  pageNumber: idx + 1,\n  caption: item.json.page?.caption,\n  moment: item.json.page?.moment,\n  cameraAngle: item.json.page?.cameraAngle,\n  imageData: item.json.imageData || item.json.response,\n  prompt: item.json.illustrationPrompt\n}));\n\nreturn [{\n  json: {\n    ...allData,\n    generatedPages\n  }\n}];"
+      },
+      "id": "aggregate-pages",
+      "name": "Aggregate Pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4840, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash",
+          "mode": "list"
+        },
+        "prompt": {
+          "value": "=You are a professional children's book editor analyzing a {{ $json.generatedPages.length }}-page picture book for visual consistency.\n\nCHARACTER REFERENCES:\n{{ $json.characterReferences?.map((c, i) => `${i+1}. ${c.name} (${c.role}): ${c.description}`).join('\\n') || 'No character references' }}\n\nCRITICAL BASELINE RULE:\n**PAGE 1 IS THE VISUAL BASELINE.** All subsequent pages must match Page 1's depiction of each character.\nIf a character has brown hair on Page 1, they MUST have brown hair on ALL pages.\nAny character who looks different from their Page 1 appearance is an issue.\n\nANALYSIS TASK:\nReview all page descriptions and identify potential consistency issues.\n\nCHECK FOR:\n1. PROTAGONIST CONSISTENCY (CRITICAL) - Hair color, features must NEVER change\n2. CHARACTER APPEARANCE - Same look across all appearances\n3. TIMELINE LOGIC - State changes should persist (wet stays wet, etc.)\n4. STYLE DRIFT - Art style should be consistent\n5. OBJECT CONTINUITY - Recurring items should look the same\n\nPAGES TO ANALYZE:\n{{ $json.generatedPages?.map(p => `Page ${p.pageNumber}: ${p.caption}`).join('\\n') }}\n\nReturn JSON:\n{\n  \"issues\": [\n    {\n      \"pageNumber\": 7,\n      \"type\": \"character_appearance\" | \"timeline_logic\" | \"style_drift\" | \"object_continuity\",\n      \"description\": \"Brief description\",\n      \"characterInvolved\": \"Character Name\",\n      \"fixPrompt\": \"Specific instruction for fixing this page\"\n    }\n  ],\n  \"pagesNeedingRegeneration\": [7, 12],\n  \"overallConsistency\": \"good\" | \"needs_fixes\" | \"major_issues\"\n}\n\nIf everything looks consistent, return: { \"issues\": [], \"pagesNeedingRegeneration\": [], \"overallConsistency\": \"good\" }",
+          "type": "expression"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "consistency-reviewer",
+      "name": "10. Consistency Reviewer",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [5060, 300],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      },
+      "notes": "ADJUSTABLE: This is the 'final review' agent. Edit what counts as an issue, severity thresholds, and fix prompts. Lower temperature = stricter."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse consistency review results\nconst reviewText = $input.first().json.text || $input.first().json.response;\nlet reviewData;\ntry {\n  const jsonMatch = reviewText.match(/\\{[\\s\\S]*\\}/);\n  reviewData = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  reviewData = { issues: [], pagesNeedingRegeneration: [], overallConsistency: 'good' };\n}\n\nconst prevData = $('Aggregate Pages').first().json;\n\nreturn [{\n  json: {\n    ...prevData,\n    consistencyReview: reviewData,\n    needsFixing: (reviewData.pagesNeedingRegeneration || []).length > 0\n  }\n}];"
+      },
+      "id": "parse-consistency",
+      "name": "Parse Consistency",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5280, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needs-fixing",
+              "leftValue": "={{ $json.needsFixing }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-needs-fixing",
+      "name": "Needs Fixing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [5500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare pages that need fixing for loop\nconst data = $input.first().json;\nconst pagesToFix = data.consistencyReview?.pagesNeedingRegeneration || [];\nconst issues = data.consistencyReview?.issues || [];\n\nif (pagesToFix.length === 0) {\n  return [{ json: data }];\n}\n\nreturn pagesToFix.map(pageNum => {\n  const issue = issues.find(i => i.pageNumber === pageNum);\n  const page = data.generatedPages?.find(p => p.pageNumber === pageNum);\n  \n  return {\n    json: {\n      pageNumber: pageNum,\n      page: page,\n      fixPrompt: issue?.fixPrompt || 'Ensure visual consistency with character references',\n      issue: issue,\n      storyId: data.storyId,\n      aestheticStyle: data.aestheticStyle,\n      styleBible: data.styleBible,\n      characterReferences: data.characterReferences,\n      allData: data\n    }\n  };\n});"
+      },
+      "id": "prep-fix-loop",
+      "name": "Prep Fix Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5720, 200]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "fix-loop",
+      "name": "11. Consistency Fixer Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [5940, 200],
+      "notes": "ADJUSTABLE: Only runs if consistency issues found. Change batchSize to fix pages in parallel."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build fix prompt with specific instructions\nconst data = $input.first().json;\n\nconst charRefs = (data.characterReferences || [])\n  .filter(c => c.referenceImage)\n  .map(c => `- ${c.name}: MATCH REFERENCE IMAGE EXACTLY`)\n  .join('\\n');\n\nconst prompt = `CONSISTENCY FIX - PAGE ${data.pageNumber}\n\nIMPORTANT FIX REQUIRED:\n${data.fixPrompt}\n\nThis page is being regenerated to fix: ${data.issue?.description || 'visual consistency'}\n\nORIGINAL CAPTION: \"${data.page?.caption || ''}\"\n\nCHARACTER CONSISTENCY (EXTRA CRITICAL):\n${charRefs}\n- Pay EXTRA attention to matching character references exactly\n- Ensure hair color, facial features, clothing match Page 1\n\nSTYLE:\n- Art Style: ${data.styleBible?.artStyle || data.aestheticStyle}\n- Maintain exact same style as other pages\n\nTECHNICAL:\n- FULL-PAGE illustration\n- NO text in image\n- Match the style of existing pages exactly\n\nRegenerate page ${data.pageNumber} with these fixes applied.`;\n\nreturn [{\n  json: {\n    ...data,\n    fixIllustrationPrompt: prompt\n  }\n}];"
+      },
+      "id": "build-fix-prompt",
+      "name": "Build Fix Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6160, 200],
+      "notes": "ADJUSTABLE: Edit fix instructions to change how consistency issues are corrected."
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash-preview-image-generation",
+          "mode": "list"
+        },
+        "prompt": {
+          "value": "={{ $json.fixIllustrationPrompt }}",
+          "type": "expression"
+        },
+        "options": {
+          "responseFormat": "image"
+        }
+      },
+      "id": "regenerate-page",
+      "name": "Regenerate Page",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [6380, 200],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge fixed pages back into the full page list\nconst fixedItems = $input.all();\nconst allData = fixedItems[0]?.json?.allData || $('Parse Consistency').first().json;\n\n// Create map of fixed pages\nconst fixedPagesMap = new Map();\nfixedItems.forEach(item => {\n  if (item.json.pageNumber && (item.json.imageData || item.json.response)) {\n    fixedPagesMap.set(item.json.pageNumber, item.json.imageData || item.json.response);\n  }\n});\n\n// Update pages with fixed images\nconst finalPages = (allData.generatedPages || []).map(page => {\n  if (fixedPagesMap.has(page.pageNumber)) {\n    return {\n      ...page,\n      imageData: fixedPagesMap.get(page.pageNumber),\n      wasFixed: true\n    };\n  }\n  return page;\n});\n\nreturn [{\n  json: {\n    ...allData,\n    generatedPages: finalPages,\n    fixedPageCount: fixedPagesMap.size\n  }\n}];"
+      },
+      "id": "merge-fixed-pages",
+      "name": "Merge Fixed Pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6600, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final aggregation - combine everything for response\nconst data = $input.first().json;\n\n// Build final response structure\nconst response = {\n  success: true,\n  storyId: data.storyId,\n  title: data.analysis?.title || 'Untitled Story',\n  theme: data.analysis?.theme || '',\n  storyArcSummary: data.storyArcSummary || [],\n  \n  pages: (data.generatedPages || []).map(page => ({\n    pageNumber: page.pageNumber,\n    caption: page.caption,\n    imageData: page.imageData,\n    wasFixed: page.wasFixed || false\n  })),\n  \n  characters: (data.characterReferences || []).map(char => ({\n    name: char.name,\n    role: char.role,\n    description: char.description,\n    referenceImage: char.referenceImage\n  })),\n  \n  styleBible: data.styleBible,\n  \n  metadata: {\n    pageCount: data.generatedPages?.length || 0,\n    characterCount: data.characterReferences?.length || 0,\n    consistencyIssuesFound: data.consistencyReview?.issues?.length || 0,\n    pagesFixed: data.fixedPageCount || 0,\n    targetAge: data.targetAge,\n    intensity: data.intensity,\n    aestheticStyle: data.aestheticStyle\n  }\n};\n\nreturn [{ json: response }];"
+      },
+      "id": "final-aggregation",
+      "name": "Final Aggregation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [6820, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "12. Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [7040, 300]
+    }
+  ],
+  "connections": {
+    "1. Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Extract Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Inputs": {
+      "main": [
+        [
+          {
+            "node": "2. Story Analyzer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Story Analyzer Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Analysis": {
+      "main": [
+        [
+          {
+            "node": "3. Scene Selector Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Scene Selector Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Scenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Scenes": {
+      "main": [
+        [
+          {
+            "node": "4. Caption Writer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Caption Writer Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Captions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Captions": {
+      "main": [
+        [
+          {
+            "node": "5. Character Extractor Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Character Extractor Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Characters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Characters": {
+      "main": [
+        [
+          {
+            "node": "6. Style Bible Creator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Style Bible Creator": {
+      "main": [
+        [
+          {
+            "node": "7. Save to Supabase",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Characters",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prep Character Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Character Loop": {
+      "main": [
+        [
+          {
+            "node": "8. Character Portrait Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8. Character Portrait Loop": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Characters",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Portrait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Portrait": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Wait": {
+      "main": [
+        [
+          {
+            "node": "8. Character Portrait Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Characters": {
+      "main": [
+        [
+          {
+            "node": "Prep Page Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Page Loop": {
+      "main": [
+        [
+          {
+            "node": "9. Page Illustrator Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9. Page Illustrator Loop": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Pages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Page Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Page Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Page Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Page Image": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Pages": {
+      "main": [
+        [
+          {
+            "node": "10. Consistency Reviewer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10. Consistency Reviewer": {
+      "main": [
+        [
+          {
+            "node": "Parse Consistency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Consistency": {
+      "main": [
+        [
+          {
+            "node": "Needs Fixing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Fixing?": {
+      "main": [
+        [
+          {
+            "node": "Prep Fix Loop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Aggregation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Fix Loop": {
+      "main": [
+        [
+          {
+            "node": "11. Consistency Fixer Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11. Consistency Fixer Loop": {
+      "main": [
+        [
+          {
+            "node": "Merge Fixed Pages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Fix Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Fix Prompt": {
+      "main": [
+        [
+          {
+            "node": "Regenerate Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regenerate Page": {
+      "main": [
+        [
+          {
+            "node": "11. Consistency Fixer Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Fixed Pages": {
+      "main": [
+        [
+          {
+            "node": "Final Aggregation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Aggregation": {
+      "main": [
+        [
+          {
+            "node": "12. Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-11-29T00:00:00.000Z",
+  "versionId": "1"
+}
+
