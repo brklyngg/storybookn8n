@@ -4,11 +4,13 @@ AI-powered children's picture book generator built with **n8n workflows** and **
 
 This is a modular, no-code-adjustable version of the Storybook Generator. Each AI "agent" is a separate n8n node that you can edit directly in the n8n UI.
 
+**Tested on n8n Cloud v1.122.4**
+
 ## Quick Start
 
 ### 1. Set Up n8n
 
-**Option A: n8n Cloud**
+**Option A: n8n Cloud (Recommended)**
 - Sign up at [n8n.io](https://n8n.io)
 - Import the workflow JSON
 
@@ -27,16 +29,28 @@ npx n8n
 
 In n8n, add these credentials:
 
-**Google Gemini API:**
-- Type: `Google Gemini API`
-- API Key: Your Gemini API key
+**Google Gemini API (Required):**
+1. Go to Settings → Credentials → Add Credential
+2. Search for "Google PaLM API" (this is used for Gemini)
+3. Enter your API Key from [Google AI Studio](https://aistudio.google.com/apikey)
+4. Name it "Google Gemini API" to match the workflow
+
+> **Important**: The workflow uses HTTP Request nodes with `googlePalmApi` credential type. This is the correct credential type for calling the Gemini API directly.
 
 **Supabase (optional, for persistence):**
 - Type: `Supabase`
 - URL: Your Supabase project URL
 - API Key: Your Supabase anon key
 
-### 4. Run the Frontend
+### 4. Verify Model Access
+
+The workflow uses these Gemini models:
+- `gemini-2.5-flash` - For text analysis (story, scenes, captions, characters)
+- `gemini-2.0-flash-preview-image-generation` - For image generation
+
+Verify your API key has access to these models at [Google AI Studio](https://aistudio.google.com/).
+
+### 5. Run the Frontend
 
 ```bash
 cd frontend
@@ -47,6 +61,11 @@ npm run dev
 Then set your n8n webhook URL in `.env.local`:
 ```
 NEXT_PUBLIC_N8N_WEBHOOK_URL=http://localhost:5678/webhook/generate-storybook
+```
+
+For n8n Cloud, use your cloud webhook URL:
+```
+NEXT_PUBLIC_N8N_WEBHOOK_URL=https://your-instance.app.n8n.cloud/webhook/generate-storybook
 ```
 
 ## Workflow Architecture
@@ -143,11 +162,46 @@ N8N Storybook Generator/
 
 ### "Rate limit exceeded"
 - Edit the `Rate Limit Wait` nodes to increase delay
-- Default is 2-3 seconds between API calls
+- Default is 3-4 seconds between API calls
 
 ### "Images not generating"
 - Verify your Gemini API key has access to image generation models
+- The model `gemini-2.0-flash-preview-image-generation` requires specific API access
 - Check n8n execution logs for specific errors
+- Try the models page at [Google AI Studio](https://aistudio.google.com/) to verify availability
+
+### "Credential errors"
+- Ensure you created a "Google PaLM API" credential (not Google Gemini Chat Model)
+- The HTTP Request nodes use `googlePalmApi` as the credential type
+- After creating the credential, you may need to re-select it in each HTTP Request node
+
+### "Model not found" errors
+- Model availability varies by region and account type
+- If `gemini-2.0-flash-preview-image-generation` is unavailable, try `gemini-2.0-flash-exp`
+- Check [Google's model documentation](https://ai.google.dev/gemini-api/docs/models) for current availability
+
+## Technical Notes
+
+### Why HTTP Request Nodes Instead of Google Gemini Node?
+
+The workflow uses HTTP Request nodes calling the Gemini API directly instead of n8n's built-in Google Gemini Chat Model node because:
+
+1. **Image Generation**: The built-in node is primarily for text chat and doesn't support image generation with `responseModalities`
+2. **Model Access**: HTTP requests allow using any model ID, including preview/experimental models
+3. **Response Format**: Direct API access provides the full response structure including inline image data
+4. **Flexibility**: Easier to update model IDs and API parameters without waiting for n8n node updates
+
+### Model Selection
+
+- **Text Analysis** (`gemini-2.5-flash`): Fast, cost-effective model for story analysis, scene selection, and caption writing
+- **Image Generation** (`gemini-2.0-flash-preview-image-generation`): Specifically designed for image generation with text prompts
+
+### Error Handling
+
+The workflow includes:
+- `onError: "continueErrorOutput"` on all HTTP Request nodes to prevent workflow crashes
+- An Error Trigger node that captures workflow-level errors
+- Graceful fallbacks in Code nodes for parsing failures
 
 ## Credits
 

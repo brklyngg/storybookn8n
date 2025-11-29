@@ -1,202 +1,298 @@
-# Detailed Setup Guide
+# n8n Cloud Setup Guide
 
-This guide walks you through setting up the n8n Storybook Generator from scratch.
+Complete setup guide for the Storybook Generator on **n8n Cloud**.
+
+---
 
 ## Prerequisites
 
-- Node.js 18+ installed
-- A Google Cloud account with Gemini API access
-- (Optional) A Supabase account for persistence
+- n8n Cloud account ([n8n.io](https://n8n.io))
+- Google AI Studio API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey))
+- Node.js 18+ (for frontend only)
 
-## Step 1: Set Up n8n
+---
 
-### Option A: Use n8n Cloud (Easiest)
+## Step 1: Get a Google Gemini API Key
 
-1. Go to [n8n.io](https://n8n.io) and sign up
-2. Create a new workflow
-3. Click the "..." menu → Import from File
-4. Upload `workflows/storybook-generator.json`
-5. Note your webhook URL (shown in the Webhook node)
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Click **"Create API Key"**
+3. Select or create a Google Cloud project
+4. Copy the API key (starts with `AIza...`)
 
-### Option B: Run n8n Locally
+The workflow uses:
+- `gemini-2.5-flash` for text analysis
+- `gemini-2.0-flash-preview-image-generation` for images
 
-```bash
-# Install and run n8n
-npx n8n
+---
 
-# n8n will start at http://localhost:5678
-```
+## Step 2: Create Credential in n8n Cloud
 
-Then import the workflow as above.
+1. Log into your n8n Cloud instance
+2. Go to **Settings → Credentials** (or click the key icon)
+3. Click **"Add Credential"**
+4. Search for **"Google PaLM API"** ← This is what n8n calls the Gemini credential
+5. Configure:
+   - **Credential Name:** `Google Gemini API` (must match exactly!)
+   - **API Key:** Paste your Gemini API key
+6. Click **"Create"**
 
-## Step 2: Configure Google Gemini Credentials
+---
 
-1. In n8n, go to **Credentials** (left sidebar)
-2. Click **Add Credential**
-3. Search for "Google Gemini"
-4. Enter your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
-5. Save
+## Step 3: Import the Workflow
 
-### Getting a Gemini API Key
+1. In n8n Cloud, go to **Workflows**
+2. Click **"+"** or **"Add Workflow"**
+3. Click the **"..."** menu (top right) → **"Import from File"**
+4. Select `workflows/storybook-generator.json`
+5. Click **"Save"**
 
-1. Go to https://aistudio.google.com/app/apikey
-2. Click "Create API Key"
-3. Copy the key
-4. Paste into n8n credentials
+You should see ~40 nodes arranged left to right.
 
-## Step 3: Configure Supabase (Optional)
+---
 
-If you want persistence (recommended), set up Supabase:
+## Step 4: Connect Credentials to Nodes
 
-### Create Supabase Project
+After import, connect your credential to each HTTP Request node:
 
-1. Go to [supabase.com](https://supabase.com)
-2. Create a new project
-3. Note your project URL and anon key
+1. Click on **"2. Story Analyzer"** node
+2. In the right panel, find **"Credential to connect with"**
+3. Select your `Google Gemini API` credential
+4. **Repeat for these 9 nodes:**
 
-### Create Tables
+| # | Node Name | Type |
+|---|-----------|------|
+| 1 | 2. Story Analyzer | Text |
+| 2 | 3. Scene Selector | Text |
+| 3 | 4. Caption Writer | Text |
+| 4 | 5. Character Extractor | Text |
+| 5 | Generate Portrait | Image |
+| 6 | Generate Environment Reference | Image |
+| 7 | Generate Page Image | Image |
+| 8 | 10. Consistency Reviewer | Text |
+| 9 | Regenerate Page | Image |
 
-Run this SQL in Supabase SQL Editor:
+5. Click **"Save"** (top right)
+
+---
+
+## Step 5: (Optional) Configure Supabase
+
+Skip this if you don't need persistence.
+
+1. Create a Supabase project at [supabase.com](https://supabase.com)
+2. Note your Project URL and service_role key
+3. In n8n: **Settings → Credentials → Add Credential → Supabase**
+4. In the workflow, click **"7. Save to Supabase"** and select your credential
+
+### Database Schema
 
 ```sql
--- Stories table
 CREATE TABLE stories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_text TEXT,
   settings JSONB,
   theme TEXT,
-  status TEXT DEFAULT 'pending',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Characters table
-CREATE TABLE characters (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  description TEXT,
-  role TEXT DEFAULT 'supporting',
-  is_hero BOOLEAN DEFAULT FALSE,
-  reference_image TEXT,
-  reference_images TEXT[],
-  status TEXT DEFAULT 'pending',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Pages table
-CREATE TABLE pages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
-  page_number INTEGER NOT NULL,
-  caption TEXT,
-  prompt TEXT,
-  image_url TEXT,
+  title TEXT,
   status TEXT DEFAULT 'pending',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
 
-### Add Supabase Credentials to n8n
+---
 
-1. In n8n, go to **Credentials**
-2. Click **Add Credential**
-3. Search for "Supabase"
-4. Enter:
-   - Host: Your project URL (e.g., `https://xxx.supabase.co`)
-   - Service Role Key: Your service_role key (from Project Settings → API)
+## Step 6: Activate the Workflow
 
-## Step 4: Update n8n Workflow Credentials
+1. Toggle **"Inactive"** → **"Active"** (top right)
+2. You should see a green indicator
 
-1. Open the workflow in n8n
-2. Click on any Gemini node (e.g., "2. Story Analyzer Agent")
-3. In the credentials dropdown, select your Gemini credential
-4. Repeat for all Gemini nodes
-5. Click on "7. Save to Supabase" and "Save Characters" nodes
-6. Select your Supabase credential
-7. Save the workflow
+### Get Your Webhook URL
 
-## Step 5: Activate the Workflow
+1. Click on **"1. Webhook Input"** node
+2. Copy the **Production URL**:
+   ```
+   https://your-instance.app.n8n.cloud/webhook/generate-storybook
+   ```
 
-1. In the top right, toggle the workflow to **Active**
-2. Note the webhook URL shown (you'll need this for the frontend)
+---
 
-## Step 6: Set Up the Frontend
+## Step 7: Set Up the Frontend
 
 ```bash
 cd frontend
 npm install
-
-# Create environment file
-cp ../.env.example .env.local
-
-# Edit .env.local with your webhook URL
+cp ../env.example .env.local
 ```
 
 Edit `.env.local`:
-```
-NEXT_PUBLIC_N8N_WEBHOOK_URL=http://localhost:5678/webhook/generate-storybook
+```bash
+NEXT_PUBLIC_N8N_WEBHOOK_URL=https://your-instance.app.n8n.cloud/webhook/generate-storybook
 ```
 
-Then start the frontend:
+Start:
 ```bash
 npm run dev
 ```
 
-## Step 7: Test It!
+Open **http://localhost:3000**
+
+---
+
+## Step 8: Test the Workflow
+
+### Quick Test via curl
+
+```bash
+curl -X POST https://your-instance.app.n8n.cloud/webhook/generate-storybook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "storyId": "test-123",
+    "storyText": "Once upon a time, a little rabbit named Rosie lived under an oak tree. One morning, she explored the meadow and found a garden where a mouse named Max lived. They had a picnic and became best friends.",
+    "settings": {
+      "targetAge": 5,
+      "desiredPageCount": 3,
+      "harshness": 3,
+      "aestheticStyle": "watercolor"
+    }
+  }'
+```
+
+### Test via Frontend
 
 1. Open http://localhost:3000
-2. Paste a short story or fairy tale
-3. Adjust settings
+2. Paste a short story
+3. Set page count to **3** (faster testing)
 4. Click "Generate Picture Book"
-5. Watch n8n execute the workflow!
 
-## Debugging
+---
+
+## Troubleshooting
+
+### "401 Unauthorized" or API Key Error
+
+- Verify key at [Google AI Studio](https://aistudio.google.com/apikey)
+- Credential name must be exactly `Google Gemini API`
+- Re-select credential in each HTTP Request node
+
+### "Webhook not found" / 404
+
+- Workflow must be **Active** (green toggle)
+- Use **Production URL**, not Test URL
+- Path must be `generate-storybook`
+
+### "Rate limit exceeded" / 429
+
+- Increase wait times in Rate Limit nodes (currently 3-4 seconds)
+- Try 6-8 seconds between calls
+- Use fewer pages for testing
+
+### "Model not found"
+
+Current models:
+- Text: `gemini-2.5-flash`
+- Images: `gemini-2.0-flash-preview-image-generation`
+
+Update URLs in HTTP Request nodes if models change.
+
+### Images Not Generating
+
+Verify HTTP Request nodes have:
+```json
+"generationConfig": {
+  "responseModalities": ["TEXT", "IMAGE"]
+}
+```
+
+### Timeout Errors
+
+Current timeouts:
+- Text nodes: 60 seconds
+- Image nodes: 120 seconds
+
+Increase in node Options if needed.
 
 ### View Execution Logs
 
-1. In n8n, click "Executions" in the left sidebar
-2. Click on any execution to see detailed step-by-step results
-3. Each node shows its input and output data
+1. Click **"Executions"** in sidebar
+2. Click any execution for step-by-step results
+3. Failed nodes show errors in red
 
-### Common Issues
+---
 
-**"Error: Invalid API Key"**
-- Check your Gemini credentials in n8n
-- Make sure the key has access to the models used
+## API Reference
 
-**"Webhook returned 404"**
-- Ensure the workflow is activated (green toggle)
-- Check the webhook path matches your frontend config
+### Endpoint
 
-**"Rate limit exceeded"**
-- Increase the wait times in "Rate Limit Wait" nodes
-- Default is 2-3 seconds; try 5-10 for heavy usage
+**POST** `https://your-instance.app.n8n.cloud/webhook/generate-storybook`
 
-## Customizing the Workflow
+### Request
 
-Each AI agent is a node you can edit:
+```json
+{
+  "storyId": "optional-uuid",
+  "storyText": "Story text...",
+  "settings": {
+    "targetAge": 6,
+    "desiredPageCount": 10,
+    "harshness": 5,
+    "aestheticStyle": "watercolor children's book",
+    "heroImage": "data:image/jpeg;base64,...",
+    "saveToSupabase": false
+  }
+}
+```
 
-1. Click on any node with "Agent" in the name
-2. Edit the prompt in the "Prompt" field
-3. Save and test
+### Response
 
-For example, to make captions more whimsical:
-1. Click "4. Caption Writer Agent"
-2. Add to the prompt: "Make captions playful and rhyme when possible"
-3. Save and regenerate
+```json
+{
+  "success": true,
+  "storyId": "uuid",
+  "title": "Story Title",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "caption": "Caption text",
+      "imageData": "data:image/png;base64,..."
+    }
+  ],
+  "characters": [
+    {
+      "name": "Character Name",
+      "referenceImage": "data:image/png;base64,..."
+    }
+  ],
+  "environments": [
+    {
+      "name": "Location",
+      "referenceImage": "data:image/png;base64,..."
+    }
+  ]
+}
+```
 
-## Architecture Notes
+---
 
-The workflow processes a story through these stages:
+## Expected Times & Costs
 
-1. **Analysis** - Understand the story structure
-2. **Selection** - Pick which moments become pages
-3. **Writing** - Create age-appropriate captions
-4. **Extraction** - Identify characters with visual details
-5. **Styling** - Create consistent visual rules
-6. **Generation** - Create character portraits and page illustrations
-7. **Review** - Check for visual consistency issues
-8. **Fixing** - Regenerate any inconsistent pages
+| Pages | Time | Est. Cost |
+|-------|------|-----------|
+| 3 | 4-6 min | ~$0.20 |
+| 5 | 6-10 min | ~$0.30 |
+| 10 | 12-20 min | ~$0.55 |
+| 20 | 25-40 min | ~$1.00 |
 
-Each stage can be adjusted independently!
+---
 
+## Customizing Prompts
+
+Edit the `jsonBody` parameter in HTTP Request nodes:
+
+| Change | Node |
+|--------|------|
+| Story interpretation | 2. Story Analyzer |
+| Scene selection | 3. Scene Selector |
+| Caption style | 4. Caption Writer |
+| Character detail | 5. Character Extractor |
+| Art style | 6. Parse Characters... (Code) |
+| Page composition | Build Page Prompt (Code) |
+| Consistency rules | 10. Consistency Reviewer |
