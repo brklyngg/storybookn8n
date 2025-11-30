@@ -315,6 +315,85 @@
     },
     {
       "parameters": {
+        "jsCode": "// Extract image from Gemini response and prepare for Supabase save\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet referenceImage = null;\n\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        referenceImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (referenceImage) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nreturn [{\n  json: {\n    ...data,\n    referenceImage,\n    // Data for Supabase save\n    storyId: data.storyId,\n    characterName: data.character?.name,\n    characterDescription: data.character?.description,\n    characterRole: data.character?.role,\n    isHero: data.character?.isHero || false,\n    saveToSupabase: data.allData?.saveToSupabase || false\n  }\n}];"
+      },
+      "id": "parse-portrait-result",
+      "name": "Parse Portrait Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3380, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "save-char-check",
+              "leftValue": "={{ $json.saveToSupabase }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-save-character",
+      "name": "Save Character?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3520, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "characters"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "story_id": "={{ $json.storyId }}",
+            "name": "={{ $json.characterName }}",
+            "description": "={{ $json.characterDescription }}",
+            "role": "={{ $json.characterRole }}",
+            "is_hero": "={{ $json.isHero }}",
+            "reference_image": "={{ $json.referenceImage }}",
+            "status": "completed"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-character-supabase",
+      "name": "Save Character to DB",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [3660, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "",
+          "name": "Supabase"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
         "unit": "seconds",
         "amount": 3
       },
@@ -322,7 +401,7 @@
       "name": "Character Rate Limit",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [3520, 300],
+      "position": [3800, 300],
       "notes": "ADJUSTABLE: Increase wait time if hitting Gemini rate limits."
     },
     {
@@ -468,6 +547,84 @@
     },
     {
       "parameters": {
+        "jsCode": "// Extract image from Gemini response and prepare for Supabase save\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet imageData = null;\n\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        imageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (imageData) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nreturn [{\n  json: {\n    ...data,\n    extractedImageData: imageData,\n    // Data for Supabase save\n    storyId: data.storyId,\n    pageNumber: data.pageIndex + 1,\n    caption: data.page?.caption,\n    prompt: data.illustrationPrompt,\n    saveToSupabase: data.allData?.saveToSupabase || false\n  }\n}];"
+      },
+      "id": "parse-page-result",
+      "name": "Parse Page Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5820, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "save-page-check",
+              "leftValue": "={{ $json.saveToSupabase }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-save-page",
+      "name": "Save Page?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [5960, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "pages"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "story_id": "={{ $json.storyId }}",
+            "page_number": "={{ $json.pageNumber }}",
+            "caption": "={{ $json.caption }}",
+            "prompt": "={{ $json.prompt }}",
+            "image_url": "={{ $json.extractedImageData }}",
+            "status": "completed"
+          }
+        },
+        "options": {}
+      },
+      "id": "save-page-supabase",
+      "name": "Save Page to DB",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [6100, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "",
+          "name": "Supabase"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
         "unit": "seconds",
         "amount": 4
       },
@@ -475,7 +632,7 @@
       "name": "Page Rate Limit",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [5940, 300],
+      "position": [6240, 300],
       "notes": "ADJUSTABLE: Increase if hitting Gemini rate limits on image generation."
     },
     {
@@ -877,6 +1034,46 @@
       "main": [
         [
           {
+            "node": "Parse Portrait Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Portrait Result": {
+      "main": [
+        [
+          {
+            "node": "Save Character?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Character?": {
+      "main": [
+        [
+          {
+            "node": "Save Character to DB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Character Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Character to DB": {
+      "main": [
+        [
+          {
             "node": "Character Rate Limit",
             "type": "main",
             "index": 0
@@ -1009,6 +1206,46 @@
       ]
     },
     "Generate Page Image": {
+      "main": [
+        [
+          {
+            "node": "Parse Page Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Page Result": {
+      "main": [
+        [
+          {
+            "node": "Save Page?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Page?": {
+      "main": [
+        [
+          {
+            "node": "Save Page to DB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Page Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Page to DB": {
       "main": [
         [
           {
