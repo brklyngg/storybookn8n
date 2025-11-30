@@ -6,6 +6,7 @@ import {
   BookOpen, ChevronLeft, Loader2, AlertTriangle,
   RefreshCw, Download, Eye, CheckCircle2
 } from 'lucide-react';
+import { fetchPageImages, fetchCharacterImages } from '@/lib/supabase';
 
 // Types
 interface StoryPage {
@@ -13,6 +14,7 @@ interface StoryPage {
   caption: string;
   imageData?: string;
   wasFixed?: boolean;
+  savedToSupabase?: boolean;
 }
 
 interface Character {
@@ -20,6 +22,7 @@ interface Character {
   role: string;
   description: string;
   referenceImage?: string;
+  savedToSupabase?: boolean;
 }
 
 interface GenerationResult {
@@ -35,6 +38,7 @@ interface GenerationResult {
     characterCount: number;
     consistencyIssuesFound: number;
     pagesFixed: number;
+    savedToSupabase?: boolean;
   };
 }
 
@@ -110,6 +114,36 @@ function StudioContent() {
       }
 
       const result = await response.json();
+
+      // If images were saved to Supabase, fetch them
+      if (result.metadata?.savedToSupabase) {
+        setCurrentStep('Fetching images from database...');
+
+        // Fetch page images
+        const pageImages = await fetchPageImages(result.storyId);
+        if (pageImages.length > 0) {
+          result.pages = result.pages.map((page: StoryPage) => {
+            const dbPage = pageImages.find(p => p.page_number === page.pageNumber);
+            if (dbPage && dbPage.image_url) {
+              return { ...page, imageData: dbPage.image_url };
+            }
+            return page;
+          });
+        }
+
+        // Fetch character images
+        const charImages = await fetchCharacterImages(result.storyId);
+        if (charImages.length > 0) {
+          result.characters = result.characters.map((char: Character) => {
+            const dbChar = charImages.find(c => c.name === char.name);
+            if (dbChar && dbChar.reference_image) {
+              return { ...char, referenceImage: dbChar.reference_image };
+            }
+            return char;
+          });
+        }
+      }
+
       setResult(result);
       setStatus('complete');
       setCurrentStep('');

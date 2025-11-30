@@ -104,3 +104,83 @@ export async function fetchStoryById(id: string): Promise<Story | null> {
 
   return data;
 }
+
+// Types for generated content
+export interface PageImage {
+  page_number: number;
+  image_url: string;
+  caption: string;
+}
+
+export interface CharacterImage {
+  name: string;
+  role: string;
+  reference_image: string;
+  is_hero: boolean;
+}
+
+export interface EnvironmentImage {
+  name: string;
+  reference_image: string;
+}
+
+// Fetch page images for a story
+export async function fetchPageImages(storyId: string): Promise<PageImage[]> {
+  if (!supabase) {
+    console.warn('Supabase not configured');
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('pages')
+    .select('page_number, image_url, caption')
+    .eq('story_id', storyId)
+    .order('page_number', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching page images:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+// Fetch character images for a story
+export async function fetchCharacterImages(storyId: string): Promise<CharacterImage[]> {
+  if (!supabase) {
+    console.warn('Supabase not configured');
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('characters')
+    .select('name, role, reference_image, is_hero')
+    .eq('story_id', storyId);
+
+  if (error) {
+    console.error('Error fetching character images:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+// Fetch environment images for a story
+export async function fetchEnvironmentImages(storyId: string): Promise<EnvironmentImage[]> {
+  if (!supabase) {
+    console.warn('Supabase not configured');
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('environments')
+    .select('name, reference_image')
+    .eq('story_id', storyId);
+
+  if (error) {
+    console.error('Error fetching environment images:', error);
+    return [];
+  }
+
+  return data || [];
+}
