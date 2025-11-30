@@ -2,6 +2,155 @@
 
 ---
 
+## Session 3 - November 29, 2025 (Late Evening)
+
+### Overview
+Critical bug fix session focused on fixing the Supabase integration in the n8n workflow. Resolved incorrect node operation and field mapping issues, then added complete database persistence for characters and pages.
+
+### Work Completed
+
+#### 1. Supabase Node Operation Fix
+- **Issue:** Node 7 (Save to Supabase) was using "insert" operation, which is invalid in n8n's Supabase node
+- **Fix:** Changed operation to "create" (correct n8n API)
+- **Impact:** Resolved blocker preventing database saves
+
+#### 2. Stories Table Field Mapping Configuration
+Configured all field mappings for the `stories` table with proper Expression syntax:
+- `id` - {{ $json.storyId }}
+- `source_text` - {{ $json.storyText }}
+- `settings` - {{ $json.settings }}
+- `theme` - {{ $json.theme }}
+- `title` - {{ $json.title }}
+- `status` - {{ $json.status }}
+- `current_step` - {{ $json.current_step }}
+
+**Technical note:** n8n Supabase node requires "Expression" type for dynamic values, not "Fixed" type.
+
+#### 3. Character Persistence Implementation
+Added 3 new nodes for saving character portraits to Supabase:
+- **Parse Portrait Result** (Code node) - Extracts base64 image data from Gemini API response
+- **Save Character?** (IF node) - Conditional check on `saveToSupabase` flag
+- **Save Character to DB** (Supabase node) - Saves to `characters` table with fields:
+  - story_id (reference)
+  - name
+  - description
+  - role
+  - reference_image (base64)
+
+#### 4. Page Persistence Implementation
+Added 3 new nodes for saving page illustrations to Supabase:
+- **Parse Page Result** (Code node) - Extracts base64 image data from Gemini API response
+- **Save Page?** (IF node) - Conditional check on `saveToSupabase` flag
+- **Save Page to DB** (Supabase node) - Saves to `pages` table with fields:
+  - story_id (reference)
+  - page_number
+  - caption
+  - scene_description
+  - image_data (base64)
+  - environment
+  - camera_angle
+
+#### 5. Workflow Connection Updates
+- Properly wired all new nodes into the workflow
+- Character save branch: After "Generate Portrait" → Parse → IF → Save → Continue loop
+- Page save branch: After "Generate Page Image" → Parse → IF → Save → Continue loop
+- Maintained loop functionality while adding conditional persistence
+
+#### 6. Documentation Updates
+- **CLAUDE.md:** Updated pipeline steps to document new save nodes
+- **SETUP_GUIDE.md:**
+  - Added complete database schema for all 3 tables (stories, characters, pages)
+  - Updated Supabase configuration instructions
+  - Documented credential setup for n8n Supabase nodes
+  - Added table selection guidance
+
+### Files Modified
+- `/workflows/storybook-generator.json` (6 new nodes, multiple connection updates)
+- `/CLAUDE.md` (pipeline documentation updated)
+- `/SETUP_GUIDE.md` (Supabase setup section expanded)
+
+### Commits Made
+1. `f01869b` - fix: configure Supabase node with proper operation and field mappings
+2. `c949fc0` - feat: add Supabase save nodes for characters and pages tables
+3. `8a832e7` - docs: update documentation for Supabase character and page save nodes
+
+### Technical Insights
+
+**n8n Supabase Node Gotchas:**
+1. Operation must be "create" not "insert" (n8n API terminology)
+2. Field mappings require "Expression" type for dynamic values
+3. Expression syntax: `{{ $json.fieldName }}` (double curly braces)
+4. Table selection is a dropdown (must re-import workflow to see tables)
+
+**n8n MCP Limitations:**
+- Partial workflow updates via MCP tools don't work reliably
+- User must manually re-import the workflow JSON file after changes
+- Credential connections must be re-selected in n8n UI after import
+
+**Database Design:**
+- All 3 tables now have proper foreign key relationships
+- `story_id` references enable CASCADE deletes
+- Base64 image storage in TEXT columns for simplicity
+- created_at timestamps for all records
+
+### Project State
+
+**Working Features:**
+- Complete Supabase persistence across all 3 tables
+- Conditional database saves (optional feature via saveToSupabase flag)
+- Proper foreign key relationships between stories, characters, and pages
+- All field mappings configured with correct Expression syntax
+
+**Testing Status:**
+- Workflow structure validated
+- Database schema verified
+- Not yet tested end-to-end with real n8n Cloud deployment
+
+**Known Requirements for User:**
+1. Re-import workflow JSON to n8n Cloud
+2. Select tables from dropdown in each of the 3 Supabase nodes
+3. Connect Supabase credential to all 3 Supabase nodes
+4. Create the 3 tables in Supabase using provided schema
+
+### Next Session Priorities
+
+1. **n8n Cloud Deployment:**
+   - Import updated workflow to n8n Cloud
+   - Configure Supabase credential (Host + Service Role Key)
+   - Select tables in Supabase node dropdowns
+   - Verify all 3 save nodes are properly connected
+
+2. **Database Testing:**
+   - Create test story with `saveToSupabase: true`
+   - Verify story record is created in `stories` table
+   - Verify character records are created in `characters` table
+   - Verify page records are created in `pages` table
+   - Check foreign key relationships
+
+3. **End-to-End Validation:**
+   - Test complete workflow with Supabase persistence enabled
+   - Verify image data is properly stored as base64
+   - Test without Supabase (saveToSupabase: false) to ensure workflow still works
+   - Validate response format with and without database saves
+
+4. **Frontend Integration:**
+   - Update frontend to support saveToSupabase parameter
+   - Add UI toggle for database persistence
+   - Display saved stories from Supabase in Story Library dropdown
+
+### Notes
+
+- The workflow now has complete database persistence capabilities
+- Database saves are optional - workflow works with or without Supabase
+- Base64 image storage is simple but may have size limitations for large books
+- Consider migrating to Supabase Storage for images if base64 becomes problematic
+- Foreign key CASCADE deletes ensure data integrity when stories are deleted
+
+### Session Duration
+Approximately 1.5 hours (Supabase configuration + documentation updates)
+
+---
+
 ## Session 2 - November 29, 2025 (Evening)
 
 ### Overview
