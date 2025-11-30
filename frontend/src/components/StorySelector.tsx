@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Library, ChevronDown, Search, Loader2, BookOpen, Clock } from 'lucide-react';
-import { fetchStories, extractTitle, Story, supabase } from '@/lib/supabase';
+import { fetchStories, Story, supabase } from '@/lib/supabase';
 
 interface StorySelectorProps {
   onSelect: (storyText: string, storyTitle: string) => void;
@@ -52,15 +52,14 @@ export function StorySelector({ onSelect }: StorySelectorProps) {
   };
 
   const handleSelect = (story: Story) => {
-    const title = extractTitle(story.source_text);
-    onSelect(story.source_text, title);
+    onSelect(story.source_text, story.title);
     setIsOpen(false);
     setSearch('');
   };
 
   // Filter stories by search term
   const filteredStories = stories.filter((story) => {
-    const title = extractTitle(story.source_text).toLowerCase();
+    const title = (story.title || '').toLowerCase();
     const theme = (story.theme || '').toLowerCase();
     const searchLower = search.toLowerCase();
     return title.includes(searchLower) || theme.includes(searchLower);
@@ -153,7 +152,6 @@ export function StorySelector({ onSelect }: StorySelectorProps) {
               ) : (
                 <div className="py-2">
                   {filteredStories.map((story) => {
-                    const title = extractTitle(story.source_text);
                     const wordCount = story.source_text.split(/\s+/).length;
 
                     return (
@@ -169,7 +167,7 @@ export function StorySelector({ onSelect }: StorySelectorProps) {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-stone-800 truncate">
-                              {title}
+                              {story.title}
                             </p>
                             {story.theme && (
                               <p className="text-xs text-stone-500 truncate mt-0.5">

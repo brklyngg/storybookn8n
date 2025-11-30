@@ -13,6 +13,7 @@ export const supabase = supabaseUrl && supabaseAnonKey
 
 export interface Story {
   id: string;
+  title: string;
   source_text: string;
   theme: string | null;
   created_at: string;
@@ -46,7 +47,7 @@ export function extractTitle(sourceText: string): string {
   return firstLine.substring(0, 50).trim() + '...';
 }
 
-// Fetch all stories for the dropdown
+// Fetch all stories for the dropdown (unique titles only, most recent first)
 export async function fetchStories(): Promise<Story[]> {
   if (!supabase) {
     console.warn('Supabase not configured');
@@ -55,7 +56,7 @@ export async function fetchStories(): Promise<Story[]> {
 
   const { data, error } = await supabase
     .from('stories')
-    .select('id, source_text, theme, created_at, status')
+    .select('id, title, source_text, theme, created_at, status')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -63,7 +64,19 @@ export async function fetchStories(): Promise<Story[]> {
     return [];
   }
 
-  return data || [];
+  // Deduplicate by title, keeping the most recent entry for each unique title
+  const seenTitles = new Set<string>();
+  const uniqueStories: Story[] = [];
+
+  for (const story of data || []) {
+    const title = story.title || extractTitle(story.source_text);
+    if (!seenTitles.has(title)) {
+      seenTitles.add(title);
+      uniqueStories.push({ ...story, title });
+    }
+  }
+
+  return uniqueStories;
 }
 
 // Fetch a single story by ID
@@ -75,13 +88,18 @@ export async function fetchStoryById(id: string): Promise<Story | null> {
 
   const { data, error } = await supabase
     .from('stories')
-    .select('id, source_text, theme, created_at, status')
+    .select('id, title, source_text, theme, created_at, status')
     .eq('id', id)
     .single();
 
   if (error) {
     console.error('Error fetching story:', error);
     return null;
+  }
+
+  // Ensure title is set (fallback to extraction if missing)
+  if (data && !data.title) {
+    data.title = extractTitle(data.source_text);
   }
 
   return data;
