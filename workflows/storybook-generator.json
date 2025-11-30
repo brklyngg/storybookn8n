@@ -213,7 +213,7 @@
     },
     {
       "parameters": {
-        "operation": "insert",
+        "operation": "create",
         "schema": {
           "__rl": true,
           "mode": "list",
@@ -232,7 +232,8 @@
             "settings": "={{ JSON.stringify($json.settings) }}",
             "theme": "={{ $json.analysis.theme }}",
             "title": "={{ $json.analysis.title }}",
-            "status": "generating"
+            "status": "generating",
+            "current_step": "characters"
           }
         },
         "options": {
