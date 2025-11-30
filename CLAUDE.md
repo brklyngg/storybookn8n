@@ -37,14 +37,16 @@ AI-powered children's picture book generator using **n8n Cloud workflows** as th
 
 | Task | Model | Why |
 |------|-------|-----|
-| Text analysis | `gemini-2.5-flash` | Fast, cost-effective, large context window |
-| Image generation | `gemini-2.0-flash-preview-image-generation` | Current image generation model |
+| Text analysis | `gemini-3-pro-preview` | Advanced reasoning, 1M token context, 64k output |
+| Image generation | `gemini-3-pro-image-preview` | Latest image generation with higher quality |
+
+**Note:** Gemini 3 models use temperature=1.0 (recommended default). Knowledge cutoff: January 2025.
 
 ## Node Architecture
 
 All AI calls use **HTTP Request nodes** calling the Gemini REST API directly:
-- **Text endpoint:** `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
-- **Image endpoint:** `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent`
+- **Text endpoint:** `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent`
+- **Image endpoint:** `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent`
 
 This approach was chosen over the LangChain Gemini node because:
 1. LangChain nodes are sub-nodes meant for AI Agents, not standalone use
