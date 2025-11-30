@@ -799,7 +799,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [8580, 300]
-    },
+    }
   ],
   "connections": {
     "1. Webhook Input": {
