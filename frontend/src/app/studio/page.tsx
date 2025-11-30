@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { 
-  BookOpen, ChevronLeft, Loader2, AlertTriangle, 
-  RefreshCw, Download, Eye, CheckCircle2 
+import {
+  BookOpen, ChevronLeft, Loader2, AlertTriangle,
+  RefreshCw, Download, Eye, CheckCircle2
 } from 'lucide-react';
 
 // Types
@@ -41,7 +41,7 @@ interface GenerationResult {
 // Get n8n webhook URL from env or use default
 const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/generate-storybook';
 
-export default function StudioPage() {
+function StudioContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const storyId = searchParams.get('id');
@@ -200,7 +200,7 @@ export default function StudioPage() {
             </div>
 
             <p className="text-sm text-stone-500 mt-4">
-              This may take a few minutes. The n8n workflow is orchestrating 
+              This may take a few minutes. The n8n workflow is orchestrating
               multiple AI agents to create your book.
             </p>
           </div>
@@ -242,7 +242,7 @@ export default function StudioPage() {
                 ))}
               </div>
               <p className="text-stone-600">Theme: {result.theme}</p>
-              
+
               {result.metadata.pagesFixed > 0 && (
                 <div className="mt-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-2 rounded-lg">
                   <CheckCircle2 className="h-4 w-4" />
@@ -261,8 +261,8 @@ export default function StudioPage() {
                   <div key={i} className="text-center">
                     <div className="w-20 h-20 mx-auto mb-2 rounded-full bg-stone-200 overflow-hidden">
                       {char.referenceImage ? (
-                        <img 
-                          src={char.referenceImage} 
+                        <img
+                          src={char.referenceImage}
                           alt={char.name}
                           className="w-full h-full object-cover"
                         />
@@ -285,7 +285,7 @@ export default function StudioPage() {
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {result.pages.map((page) => (
-                <div 
+                <div
                   key={page.pageNumber}
                   className={`card overflow-hidden cursor-pointer transition-smooth hover:shadow-lg ${
                     selectedPage === page.pageNumber ? 'ring-2 ring-amber-500' : ''
@@ -294,8 +294,8 @@ export default function StudioPage() {
                 >
                   <div className="aspect-[2/3] bg-stone-100 relative">
                     {page.imageData ? (
-                      <img 
-                        src={page.imageData} 
+                      <img
+                        src={page.imageData}
                         alt={`Page ${page.pageNumber}`}
                         className="w-full h-full object-cover"
                       />
@@ -324,3 +324,20 @@ export default function StudioPage() {
   );
 }
 
+// Loading fallback for Suspense
+function StudioLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-stone-50">
+      <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+    </div>
+  );
+}
+
+// Main export with Suspense boundary
+export default function StudioPage() {
+  return (
+    <Suspense fallback={<StudioLoading />}>
+      <StudioContent />
+    </Suspense>
+  );
+}

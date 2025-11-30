@@ -6,13 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI-powered children's picture book generator using **n8n Cloud workflows** as the backend and **Next.js** as the frontend. Uses direct HTTP Request nodes to call the Google Gemini API for maximum compatibility and control.
 
+## Deployment
+
+| Component | URL |
+|-----------|-----|
+| **Frontend** | https://storybookn8n.netlify.app |
+| **n8n Workflow** | n8n Cloud (import `workflows/storybook-generator.json`) |
+| **Database** | Supabase project `znvqqnrwuzjtdgqlkgvf` |
+
+**Netlify:** Connected to GitHub repo, auto-deploys on push to `main`.
+
 ## Architecture
 
 ```
 [Next.js Frontend] → [n8n Cloud Webhook] → [HTTP Request Pipeline] → [JSON Response]
+        ↓
+   [Supabase Stories Library]
 ```
 
-**Frontend:** Next.js 15 app in `/frontend` that collects story input and settings, then calls the n8n webhook.
+**Frontend:** Next.js 15 app in `/frontend` that collects story input and settings, then calls the n8n webhook. Includes a Story Library dropdown that loads stories from Supabase.
 
 **Backend:** n8n workflow (`workflows/storybook-generator.json`) using native HTTP Request nodes to call Gemini API directly.
 
@@ -72,17 +84,23 @@ npm run lint       # ESLint
 | `workflows/storybook-generator.json` | Main n8n workflow - import into n8n Cloud |
 | `frontend/src/app/page.tsx` | Story input form with settings |
 | `frontend/src/app/studio/page.tsx` | Calls n8n webhook, displays generated book |
+| `frontend/src/components/StorySelector.tsx` | Supabase story library dropdown |
+| `frontend/src/components/StylePicker.tsx` | Visual art style selector |
+| `frontend/src/components/HeroPhotoUpload.tsx` | Hero photo upload for protagonist |
+| `frontend/src/lib/supabase.ts` | Supabase client + story fetching |
 | `SETUP_GUIDE.md` | Complete setup instructions for n8n Cloud |
 | `env.example` | Template for frontend environment variables |
 
 ## Environment Variables
 
-Create `frontend/.env.local`:
+Create `frontend/.env.local` (or configure in Netlify):
 ```
 NEXT_PUBLIC_N8N_WEBHOOK_URL=https://your-name.app.n8n.cloud/webhook/generate-storybook
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url        # optional
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key       # optional
+NEXT_PUBLIC_SUPABASE_URL=https://znvqqnrwuzjtdgqlkgvf.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon_key_from_supabase_dashboard>
 ```
+
+**Supabase** is used for the Story Library feature - stores pre-existing stories that users can select from a dropdown instead of pasting text.
 
 ## n8n Cloud Setup
 
