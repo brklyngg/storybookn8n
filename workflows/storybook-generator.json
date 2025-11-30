@@ -213,44 +213,42 @@
     },
     {
       "parameters": {
-        "operation": "create",
-        "schema": {
-          "__rl": true,
-          "mode": "list",
-          "value": "public"
+        "method": "POST",
+        "url": "https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "mode": "list",
-          "value": "stories"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "id": "={{ $json.storyId }}",
-            "source_text": "={{ $json.storyText.substring(0, 10000) }}",
-            "settings": "={{ JSON.stringify($json.settings) }}",
-            "theme": "={{ $json.analysis.theme }}",
-            "title": "={{ $json.analysis.title }}",
-            "status": "generating",
-            "current_step": "characters"
-          }
-        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"id\": {{ JSON.stringify($json.storyId) }},\n  \"source_text\": {{ JSON.stringify($json.storyText.substring(0, 10000)) }},\n  \"settings\": {{ JSON.stringify($json.settings) }},\n  \"theme\": {{ JSON.stringify($json.analysis.theme || '') }},\n  \"title\": {{ JSON.stringify($json.analysis.title || 'Untitled') }},\n  \"status\": \"generating\",\n  \"current_step\": \"characters\"\n}",
         "options": {
-          "onConflict": "update"
+          "timeout": 30000
         }
       },
       "id": "save-story-supabase",
       "name": "7. Save to Supabase",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [2420, 200],
       "credentials": {
-        "supabaseApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Supabase"
+          "name": "Supabase Service Key"
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -354,40 +352,39 @@
     },
     {
       "parameters": {
-        "operation": "create",
-        "schema": {
-          "__rl": true,
-          "mode": "list",
-          "value": "public"
+        "method": "POST",
+        "url": "https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/characters",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "mode": "list",
-          "value": "characters"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "story_id": "={{ $json.storyId }}",
-            "name": "={{ $json.characterName }}",
-            "description": "={{ $json.characterDescription }}",
-            "role": "={{ $json.characterRole }}",
-            "is_hero": "={{ $json.isHero }}",
-            "reference_image": "={{ $json.referenceImage }}",
-            "status": "completed"
-          }
-        },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"story_id\": {{ JSON.stringify($json.storyId) }},\n  \"name\": {{ JSON.stringify($json.characterName || '') }},\n  \"description\": {{ JSON.stringify($json.characterDescription || '') }},\n  \"role\": {{ JSON.stringify($json.characterRole || 'supporting') }},\n  \"is_hero\": {{ $json.isHero || false }},\n  \"reference_image\": {{ JSON.stringify($json.referenceImage || '') }},\n  \"status\": \"completed\"\n}",
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "save-character-supabase",
       "name": "Save Character to DB",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [3660, 200],
       "credentials": {
-        "supabaseApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Supabase"
+          "name": "Supabase Service Key"
         }
       },
       "onError": "continueErrorOutput"
@@ -586,39 +583,39 @@
     },
     {
       "parameters": {
-        "operation": "create",
-        "schema": {
-          "__rl": true,
-          "mode": "list",
-          "value": "public"
+        "method": "POST",
+        "url": "https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/pages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "mode": "list",
-          "value": "pages"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "story_id": "={{ $json.storyId }}",
-            "page_number": "={{ $json.pageNumber }}",
-            "caption": "={{ $json.caption }}",
-            "prompt": "={{ $json.prompt }}",
-            "image_url": "={{ $json.extractedImageData }}",
-            "status": "completed"
-          }
-        },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"story_id\": {{ JSON.stringify($json.storyId) }},\n  \"page_number\": {{ $json.pageNumber }},\n  \"caption\": {{ JSON.stringify($json.caption || '') }},\n  \"prompt\": {{ JSON.stringify($json.prompt || '') }},\n  \"image_url\": {{ JSON.stringify($json.extractedImageData || '') }},\n  \"status\": \"completed\"\n}",
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "save-page-supabase",
       "name": "Save Page to DB",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [6100, 200],
       "credentials": {
-        "supabaseApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Supabase"
+          "name": "Supabase Service Key"
         }
       },
       "onError": "continueErrorOutput"

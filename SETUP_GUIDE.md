@@ -81,17 +81,28 @@ After import, connect your credential to each HTTP Request node:
 
 Skip this if you don't need persistence.
 
-1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Note your Project URL and service_role key
-3. In n8n: **Settings → Credentials → Add Credential → Supabase**
-4. Configure the credential:
-   - **Host:** Your Supabase project URL (e.g., `https://znvqqnrwuzjtdgqlkgvf.supabase.co`)
-   - **Service Role Secret:** Your service_role key from Supabase Dashboard → Settings → API
-5. In the workflow, select this credential for these 3 Supabase nodes:
-   - **7. Save Story to Supabase** - Saves to `stories` table
-   - **Save Character to DB** - Saves to `characters` table
-   - **Save Page to DB** - Saves to `pages` table
-6. For each Supabase node, select the appropriate table from the dropdown
+### Create the Credential
+
+1. Get your **service_role key** from Supabase:
+   - Go to [supabase.com](https://supabase.com) → Your Project
+   - **Settings → API → Project API keys**
+   - Copy the `service_role` key (NOT the anon key)
+
+2. In n8n: **Settings → Credentials → Add Credential → Header Auth**
+3. Configure:
+   - **Name:** `Supabase Service Key`
+   - **Name (header):** `Authorization`
+   - **Value:** `Bearer <paste your service_role key>`
+4. Click **"Create"**
+
+### Connect Credential to Nodes
+
+After import, select the `Supabase Service Key` credential on these 3 nodes:
+- **7. Save to Supabase** - Saves to `stories` table
+- **Save Character to DB** - Saves to `characters` table
+- **Save Page to DB** - Saves to `pages` table
+
+> **Note:** These nodes use HTTP Request to call the Supabase REST API directly. This ensures all configurations import correctly without needing to re-select tables from dropdowns.
 
 ### Database Schema
 
@@ -115,7 +126,9 @@ CREATE TABLE characters (
   name TEXT NOT NULL,
   description TEXT,
   role TEXT,
+  is_hero BOOLEAN DEFAULT FALSE,
   reference_image TEXT,
+  status TEXT DEFAULT 'pending',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -125,10 +138,9 @@ CREATE TABLE pages (
   story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
   page_number INTEGER NOT NULL,
   caption TEXT,
-  scene_description TEXT,
-  image_data TEXT,
-  environment TEXT,
-  camera_angle TEXT,
+  prompt TEXT,
+  image_url TEXT,
+  status TEXT DEFAULT 'pending',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
