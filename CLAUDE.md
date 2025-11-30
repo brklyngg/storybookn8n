@@ -105,12 +105,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon_key_from_supabase_dashboard>
 ## n8n Cloud Setup
 
 ### Credential Required
-- **Type:** Google PaLM API (this is what n8n calls the Gemini credential)
-- **Name:** Must be exactly `Google Gemini API`
-- **API Key:** From [Google AI Studio](https://aistudio.google.com/apikey)
+- **Type:** Header Auth
+- **Name:** `Gemini API Key`
+- **Value:** Your API key from [Google AI Studio](https://aistudio.google.com/apikey)
+
+> **Important:** The workflow passes the API key via URL parameter (`?key=...`). The Header Auth credential is used as a secure container for the API key, which is referenced in HTTP Request URLs using `{{ $credentials.httpHeaderAuth.value }}`.
 
 ### Nodes Requiring Credential
-After import, connect the credential to these 9 HTTP Request nodes:
+After import, connect the `Gemini API Key` (Header Auth) credential to these 9 HTTP Request nodes:
 1. 2. Story Analyzer
 2. 3. Scene Selector
 3. 4. Caption Writer

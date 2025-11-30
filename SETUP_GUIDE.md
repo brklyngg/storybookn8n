@@ -20,8 +20,8 @@ Complete setup guide for the Storybook Generator on **n8n Cloud**.
 4. Copy the API key (starts with `AIza...`)
 
 The workflow uses:
-- `gemini-2.5-flash` for text analysis
-- `gemini-2.0-flash-preview-image-generation` for images
+- `gemini-3-pro-preview` for text analysis (most intelligent multimodal model)
+- `gemini-3-pro-image-preview` for images ("Nano Banana Pro" - advanced generation)
 
 ---
 
@@ -30,11 +30,13 @@ The workflow uses:
 1. Log into your n8n Cloud instance
 2. Go to **Settings → Credentials** (or click the key icon)
 3. Click **"Add Credential"**
-4. Search for **"Google PaLM API"** ← This is what n8n calls the Gemini credential
+4. Search for **"Header Auth"**
 5. Configure:
-   - **Credential Name:** `Google Gemini API` (must match exactly!)
-   - **API Key:** Paste your Gemini API key
+   - **Name:** `Gemini API Key`
+   - **Value:** Paste your Gemini API key
 6. Click **"Create"**
+
+> **Note:** The workflow passes the API key via URL parameter (`?key=...`), which the Gemini API supports. The Header Auth credential is used as a secure container for the API key, which is then referenced in the HTTP Request URLs.
 
 ---
 
@@ -56,7 +58,7 @@ After import, connect your credential to each HTTP Request node:
 
 1. Click on **"2. Story Analyzer"** node
 2. In the right panel, find **"Credential to connect with"**
-3. Select your `Google Gemini API` credential
+3. Select your `Gemini API Key` credential (Header Auth type)
 4. **Repeat for these 9 nodes:**
 
 | # | Node Name | Type |
@@ -170,7 +172,8 @@ curl -X POST https://your-instance.app.n8n.cloud/webhook/generate-storybook \
 ### "401 Unauthorized" or API Key Error
 
 - Verify key at [Google AI Studio](https://aistudio.google.com/apikey)
-- Credential name must be exactly `Google Gemini API`
+- Credential type must be **Header Auth**, not Google PaLM API
+- Header name must be exactly `x-goog-api-key`
 - Re-select credential in each HTTP Request node
 
 ### "Webhook not found" / 404
@@ -188,8 +191,8 @@ curl -X POST https://your-instance.app.n8n.cloud/webhook/generate-storybook \
 ### "Model not found"
 
 Current models:
-- Text: `gemini-2.5-flash`
-- Images: `gemini-2.0-flash-preview-image-generation`
+- Text: `gemini-3-pro-preview`
+- Images: `gemini-3-pro-image-preview`
 
 Update URLs in HTTP Request nodes if models change.
 

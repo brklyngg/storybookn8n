@@ -31,9 +31,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are an expert literary analyst. Analyze this story and provide a deep understanding of its narrative structure.\\n\\nSTORY TEXT:\\n{{ $json.storyText.substring(0, 8000) }}\\n\\nTARGET AUDIENCE: {{ $json.targetAge }}-year-old reader\\n\\nANALYZE AND RETURN JSON:\\n{\\n  \\\"title\\\": \\\"Story title or best guess\\\",\\n  \\\"theme\\\": \\\"Core theme in 1-2 sentences\\\",\\n  \\\"emotionalArc\\\": \\\"Description of the emotional journey\\\",\\n  \\\"protagonistJourney\\\": \\\"What the main character learns or achieves\\\",\\n  \\\"keyMoments\\\": [\\n    \\\"List of 8-12 most important/visual moments in the story\\\"\\n  ],\\n  \\\"tone\\\": \\\"Overall tone (e.g., whimsical, adventurous, heartwarming)\\\",\\n  \\\"setting\\\": \\\"Primary setting(s) description\\\",\\n  \\\"keyEnvironments\\\": [\\n    \\\"List of 3-5 distinct locations/environments that appear multiple times\\\"\\n  ],\\n  \\\"ageAppropriatenessNotes\\\": \\\"Any content considerations for the target age\\\"\\n}\\n\\nReturn ONLY valid JSON.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 1.0,\n    \"topP\": 0.95,\n    \"maxOutputTokens\": 4096\n  }\n}",
@@ -52,9 +52,9 @@
       "typeVersion": 4.2,
       "position": [440, 300],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
@@ -73,9 +73,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are selecting scenes for a {{ $json.desiredPageCount }}-page children's picture book.\\n\\nSTORY ANALYSIS:\\nTitle: {{ $json.analysis.title }}\\nTheme: {{ $json.analysis.theme }}\\nEmotional Arc: {{ $json.analysis.emotionalArc }}\\nKey Moments: {{ JSON.stringify($json.analysis.keyMoments) }}\\n\\nTARGET: {{ $json.targetAge }}-year-old reader\\nPAGE COUNT: Exactly {{ $json.desiredPageCount }} pages\\nINTENSITY: {{ $json.intensity }}/10\\n\\nSCENE SELECTION PRINCIPLES:\\n1. NARRATIVE ESSENTIALS - Include pivotal plot moments\\n2. EMOTIONAL PEAKS - Joy, discovery, challenge, resolution\\n3. VISUAL IMPACT - Strong visual potential and variety\\n4. CHARACTER DEVELOPMENT - Show growth and relationships\\n5. PACING - Balance action with reflection\\n6. ICONIC MOMENTS - For known stories, include expected scenes\\n7. AGE APPROPRIATENESS - Resonate with target age\\n8. VISUAL VARIETY - Mix wide shots, close-ups, different compositions\\n\\nHANDLING STORY LENGTH:\\n- SHORT STORY: Break moments into multiple pages, expand emotional beats\\n- LONG STORY: Combine related moments, focus on high-impact scenes\\n\\nReturn EXACTLY {{ $json.desiredPageCount }} scenes as JSON:\\n{\\n  \\\"scenes\\\": [\\n    {\\n      \\\"pageNumber\\\": 1,\\n      \\\"moment\\\": \\\"The key moment this page captures\\\",\\n      \\\"emotionalBeat\\\": \\\"What the reader should feel\\\",\\n      \\\"visualPotential\\\": \\\"Why this moment is visually interesting\\\",\\n      \\\"cameraAngle\\\": \\\"wide shot | medium shot | close-up\\\",\\n      \\\"environment\\\": \\\"Which location/setting this scene takes place in\\\"\\n    }\\n  ],\\n  \\\"storyArcSummary\\\": [\\n    \\\"First major beat\\\",\\n    \\\"Second major beat\\\",\\n    \\\"Third major beat\\\",\\n    \\\"Resolution\\\"\\n  ]\\n}\\n\\nReturn ONLY valid JSON with exactly {{ $json.desiredPageCount }} scenes.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 1.0,\n    \"topP\": 0.95,\n    \"maxOutputTokens\": 8192\n  }\n}",
@@ -89,9 +89,9 @@
       "typeVersion": 4.2,
       "position": [880, 300],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
@@ -110,9 +110,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are writing captions for a {{ $json.desiredPageCount }}-page children's picture book.\\n\\nTARGET AGE: {{ $json.targetAge }} years old\\nSTORY THEME: {{ $json.analysis.theme }}\\nTONE: {{ $json.analysis.tone }}\\n\\nAGE-APPROPRIATE LANGUAGE GUIDELINES:\\n{{ $json.targetAge <= 5 ? '- Very simple language, basic concepts, short sentences (5-8 words)' : '' }}\\n{{ $json.targetAge > 5 && $json.targetAge <= 8 ? '- Simple but engaging sentences, adventure vocabulary, 8-12 words per sentence' : '' }}\\n{{ $json.targetAge > 8 && $json.targetAge <= 12 ? '- More complex sentences, richer vocabulary, can handle nuance, 10-15 words' : '' }}\\n{{ $json.targetAge > 12 ? '- Sophisticated language, nuanced themes, literary quality, varied sentence length' : '' }}\\n\\nSCENES TO CAPTION:\\n{{ JSON.stringify($json.scenes, null, 2) }}\\n\\nFor each scene, write a caption that:\\n1. Is age-appropriate for a {{ $json.targetAge }}-year-old\\n2. Captures the emotional moment\\n3. Flows naturally when read aloud\\n4. Avoids spoiling future events\\n5. Works standalone but connects to the larger story\\n\\nReturn JSON:\\n{\\n  \\\"captions\\\": [\\n    {\\n      \\\"pageNumber\\\": 1,\\n      \\\"caption\\\": \\\"The actual caption text to display\\\"\\n    }\\n  ]\\n}\\n\\nReturn ONLY valid JSON.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 1.0,\n    \"topP\": 0.95,\n    \"maxOutputTokens\": 4096\n  }\n}",
@@ -126,9 +126,9 @@
       "typeVersion": 4.2,
       "position": [1320, 300],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
@@ -147,9 +147,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are identifying characters for a children's picture book to ensure visual consistency.\\n\\nSTORY TEXT:\\n{{ $json.storyText.substring(0, 6000) }}\\n\\nPAGES/SCENES:\\n{{ JSON.stringify($json.pages, null, 2) }}\\n\\n{{ $json.heroImage ? 'IMPORTANT: A custom photo reference has been provided for the protagonist. The first character you identify should be marked as isHero: true and their description should note that a photo reference exists.' : '' }}\\n\\nExtract ALL characters that appear in the story. For each character, provide:\\n1. PRECISE visual description - physical features, clothing, colors, props\\n2. Their role in the story\\n3. Approximate age or size relative to others\\n4. Any distinctive visual markers that must remain consistent\\n\\nReturn JSON:\\n{\\n  \\\"characters\\\": [\\n    {\\n      \\\"name\\\": \\\"Character Name\\\",\\n      \\\"description\\\": \\\"PRECISE visual description: [hair color/style], [eye color], [skin tone], [body type], [clothing with specific colors], [distinctive props/accessories], [approximate age/size]\\\",\\n      \\\"role\\\": \\\"main\\\" | \\\"supporting\\\" | \\\"background\\\",\\n      \\\"isHero\\\": true | false,\\n      \\\"keyFeatures\\\": [\\\"brown curly hair\\\", \\\"red coat\\\", \\\"round glasses\\\"],\\n      \\\"appearsOnPages\\\": [1, 3, 5, 7]\\n    }\\n  ]\\n}\\n\\nIMPORTANT:\\n- First character should be the protagonist with isHero: true\\n- Next 1-2 characters should be 'main' role\\n- Next 2-3 characters should be 'supporting' role\\n- Rest are 'background'\\n- Be VERY specific about colors and visual details\\n- These descriptions will be used to maintain consistency across all images\\n\\nReturn ONLY valid JSON.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 1.0,\n    \"topP\": 0.95,\n    \"maxOutputTokens\": 4096\n  }\n}",
@@ -163,9 +163,9 @@
       "typeVersion": 4.2,
       "position": [1760, 300],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
@@ -288,9 +288,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Create a character reference sheet for children's book illustration:\\n\\nCHARACTER: {{ $json.character.name }}\\nROLE: {{ $json.character.role }}{{ $json.character.isHero ? ' (PROTAGONIST)' : '' }}\\nDESCRIPTION: {{ $json.character.description }}\\nKEY FEATURES: {{ $json.character.keyFeatures ? $json.character.keyFeatures.join(', ') : 'As described' }}\\n\\nSTYLE: {{ $json.aestheticStyle }}\\nART DIRECTION: {{ $json.styleBible.artStyle }}\\n\\nCREATE:\\n- Front-facing portrait showing full character design\\n- Clear, consistent lighting\\n- Neutral background (white or light parchment)\\n- Professional children's book illustration quality\\n- NO TEXT OR LABELS in the image\\n\\nUNIFIED STYLE (Critical):\\n- All characters must share the EXACT same rendering style\\n- Match the art style: {{ $json.styleBible.artStyle }}\\n- Color palette: {{ $json.styleBible.colorPalette }}\\n- Lighting: {{ $json.styleBible.lighting }}\\n\\nThis image should be safe for children ages 3-12.\\n\\nGenerate a single character reference image.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"responseModalities\": [\"TEXT\", \"IMAGE\"]\n  }\n}",
@@ -304,9 +304,9 @@
       "typeVersion": 4.2,
       "position": [3300, 300],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
@@ -360,9 +360,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Create an environment/location reference for children's book illustration:\\n\\nLOCATION: {{ $json.environmentName }}\\nSTORY SETTING: {{ $json.analysis?.setting || 'As described in the story' }}\\nSTORY TONE: {{ $json.analysis?.tone || 'child-friendly' }}\\n\\nSTYLE: {{ $json.aestheticStyle }}\\nART DIRECTION: {{ $json.styleBible.artStyle }}\\n\\nCREATE:\\n- Wide establishing shot of this location\\n- Empty scene (no characters) to use as background reference\\n- Clear lighting that matches the story's mood\\n- Rich environmental details appropriate for the story\\n- Professional children's book illustration quality\\n- NO TEXT OR LABELS in the image\\n\\nUNIFIED STYLE (Critical):\\n- Must match character portrait style exactly\\n- Art style: {{ $json.styleBible.artStyle }}\\n- Color palette: {{ $json.styleBible.colorPalette }}\\n- Lighting: {{ $json.styleBible.lighting }}\\n- Visual density: {{ $json.styleBible.visualDensity }}\\n\\nThis location will appear multiple times in the book, so establish a clear visual identity.\\nThis image should be safe for children ages 3-12.\\n\\nGenerate an environment reference image.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"responseModalities\": [\"TEXT\", \"IMAGE\"]\n  }\n}",
@@ -376,9 +376,9 @@
       "typeVersion": 4.2,
       "position": [4400, 300],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
@@ -441,9 +441,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": {{ JSON.stringify($json.illustrationPrompt) }}\n    }]\n  }],\n  \"generationConfig\": {\n    \"responseModalities\": [\"TEXT\", \"IMAGE\"]\n  }\n}",
@@ -457,9 +457,9 @@
       "typeVersion": 4.2,
       "position": [5720, 300],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
@@ -490,9 +490,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are reviewing a {{ $json.generatedPages.length }}-page picture book for visual consistency.\\n\\nCHARACTER REFERENCES:\\n{{ $json.characterReferences ? $json.characterReferences.map((c, i) => (i+1) + '. ' + c.name + (c.isHero ? ' (HERO)' : '') + ' (' + c.role + '): ' + (c.keyFeatures ? c.keyFeatures.join(', ') : c.description)).join('\\\\n') : 'No references' }}\\n\\nENVIRONMENT REFERENCES:\\n{{ $json.environmentReferences ? $json.environmentReferences.map((e, i) => (i+1) + '. ' + e.name).join('\\\\n') : 'No environment references' }}\\n\\nBASELINE RULE: PAGE 1 IS THE VISUAL BASELINE. All pages must match Page 1's character and environment depictions.\\n\\nCHECK FOR:\\n1. PROTAGONIST CONSISTENCY - Hair, features must NEVER change\\n2. CHARACTER APPEARANCE - Same look across all appearances\\n3. ENVIRONMENT CONSISTENCY - Same locations should look similar\\n4. TIMELINE LOGIC - State changes should persist\\n5. STYLE DRIFT - Art style should be consistent\\n6. OBJECT CONTINUITY - Recurring items look the same\\n\\nPAGES:\\n{{ $json.generatedPages ? $json.generatedPages.map(p => 'Page ' + p.pageNumber + ' [' + (p.environment || 'unspecified') + ']: ' + p.caption).join('\\\\n') : 'No pages' }}\\n\\nReturn JSON:\\n{\\n  \\\"issues\\\": [\\n    {\\n      \\\"pageNumber\\\": 7,\\n      \\\"type\\\": \\\"character_appearance\\\" | \\\"environment_consistency\\\" | \\\"timeline_logic\\\" | \\\"style_drift\\\",\\n      \\\"description\\\": \\\"Brief description\\\",\\n      \\\"characterInvolved\\\": \\\"Name\\\",\\n      \\\"fixPrompt\\\": \\\"Specific fix instruction\\\"\\n    }\\n  ],\\n  \\\"pagesNeedingRegeneration\\\": [7],\\n  \\\"overallConsistency\\\": \\\"good\\\" | \\\"needs_fixes\\\" | \\\"major_issues\\\"\\n}\\n\\nIf consistent: { \\\"issues\\\": [], \\\"pagesNeedingRegeneration\\\": [], \\\"overallConsistency\\\": \\\"good\\\" }\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 1.0,\n    \"topP\": 0.95,\n    \"maxOutputTokens\": 4096\n  }\n}",
@@ -506,9 +506,9 @@
       "typeVersion": 4.2,
       "position": [6380, 300],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
@@ -590,9 +590,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googlePalmApi",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key={{ $credentials.httpHeaderAuth.value }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": {{ JSON.stringify($json.fixIllustrationPrompt) }}\n    }]\n  }],\n  \"generationConfig\": {\n    \"responseModalities\": [\"TEXT\", \"IMAGE\"]\n  }\n}",
@@ -606,9 +606,9 @@
       "typeVersion": 4.2,
       "position": [7700, 200],
       "credentials": {
-        "googlePalmApi": {
+        "httpHeaderAuth": {
           "id": "",
-          "name": "Google Gemini API"
+          "name": "Gemini API Key"
         }
       },
       "onError": "continueErrorOutput",
