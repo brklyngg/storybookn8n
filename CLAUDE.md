@@ -36,10 +36,16 @@ AI-powered children's picture book generator using **n8n Cloud workflows** as th
 4. **Caption Writer** - Writes age-appropriate captions
 5. **Character Extractor** - Identifies characters, marks protagonist as hero
 6. **Parse Characters & Create Style Bible** - Builds style rules, extracts environment list
-7. **Save to Supabase** - Conditional branch for database storage (optional)
+7. **Save Story to Supabase** - Conditional branch for database storage (optional)
 8. **Character Portrait Loop** - Generates portraits for main/supporting characters
+   - **Parse Portrait Result** - Extracts image from Gemini response
+   - **Save Character?** - Conditional check for saveToSupabase flag
+   - **Save Character to DB** - Saves character to `characters` table
 8b. **Environment Reference Loop** - Generates reference images for recurring locations
 9. **Page Illustrator Loop** - Generates page illustrations
+   - **Parse Page Result** - Extracts image from Gemini response
+   - **Save Page?** - Conditional check for saveToSupabase flag
+   - **Save Page to DB** - Saves page to `pages` table
 10. **Consistency Reviewer** - Checks for visual consistency issues
 11. **Consistency Fixer Loop** - Regenerates inconsistent pages (max 3 per run)
 12. **Build Final Response** - Assembles complete book data

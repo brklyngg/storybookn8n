@@ -84,11 +84,19 @@ Skip this if you don't need persistence.
 1. Create a Supabase project at [supabase.com](https://supabase.com)
 2. Note your Project URL and service_role key
 3. In n8n: **Settings → Credentials → Add Credential → Supabase**
-4. In the workflow, click **"7. Save to Supabase"** and select your credential
+4. Configure the credential:
+   - **Host:** Your Supabase project URL (e.g., `https://znvqqnrwuzjtdgqlkgvf.supabase.co`)
+   - **Service Role Secret:** Your service_role key from Supabase Dashboard → Settings → API
+5. In the workflow, select this credential for these 3 Supabase nodes:
+   - **7. Save Story to Supabase** - Saves to `stories` table
+   - **Save Character to DB** - Saves to `characters` table
+   - **Save Page to DB** - Saves to `pages` table
+6. For each Supabase node, select the appropriate table from the dropdown
 
 ### Database Schema
 
 ```sql
+-- Stories table
 CREATE TABLE stories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_text TEXT,
@@ -96,6 +104,31 @@ CREATE TABLE stories (
   theme TEXT,
   title TEXT,
   status TEXT DEFAULT 'pending',
+  current_step TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Characters table
+CREATE TABLE characters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  role TEXT,
+  reference_image TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Pages table
+CREATE TABLE pages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
+  page_number INTEGER NOT NULL,
+  caption TEXT,
+  scene_description TEXT,
+  image_data TEXT,
+  environment TEXT,
+  camera_angle TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
