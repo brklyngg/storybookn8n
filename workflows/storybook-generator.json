@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract and validate all inputs in one place\nconst body = $input.first().json.body;\n\nconst storyText = body.storyText || '';\nconst settings = body.settings || {};\n\n// Hero image support - base64 encoded custom protagonist photo\nconst heroImage = settings.heroImage || body.heroImage || null;\n\nreturn [{\n  json: {\n    storyText,\n    settings,\n    storyId: body.storyId || crypto.randomUUID(),\n    targetAge: settings.targetAge || 6,\n    desiredPageCount: settings.desiredPageCount || 10,\n    intensity: settings.harshness || 5,\n    aestheticStyle: settings.aestheticStyle || 'watercolor children\\'s book illustration',\n    freeformNotes: settings.freeformNotes || '',\n    saveToSupabase: true,\n    heroImage: heroImage\n  }\n}];"
+        "jsCode": "// Extract and validate all inputs in one place\n// Handle both direct body and nested body formats\nconst input = $input.first().json;\nconst body = input.body || input;\n\nconst storyText = body.storyText || '';\nconst settings = body.settings || {};\n\n// Hero image support - base64 encoded custom protagonist photo\nconst heroImage = settings.heroImage || body.heroImage || null;\n\nreturn [{\n  json: {\n    storyText,\n    settings,\n    storyId: body.storyId || crypto.randomUUID(),\n    targetAge: settings.targetAge || 6,\n    desiredPageCount: settings.desiredPageCount || 10,\n    intensity: settings.harshness || 5,\n    aestheticStyle: settings.aestheticStyle || 'watercolor children\\'s book illustration',\n    freeformNotes: settings.freeformNotes || '',\n    saveToSupabase: true,\n    heroImage: heroImage\n  }\n}];"
       },
       "id": "extract-inputs",
       "name": "Extract & Validate Inputs",
@@ -800,40 +800,6 @@
       "typeVersion": 1.1,
       "position": [8580, 300]
     },
-    {
-      "parameters": {},
-      "id": "error-trigger",
-      "name": "Error Trigger",
-      "type": "n8n-nodes-base.errorTrigger",
-      "typeVersion": 1,
-      "position": [0, 600]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Handle workflow errors gracefully\nconst error = $input.first().json;\n\nconst errorResponse = {\n  success: false,\n  error: {\n    message: error.message || 'An error occurred during storybook generation',\n    node: error.node?.name || 'Unknown',\n    timestamp: new Date().toISOString()\n  },\n  storyId: error.execution?.customData?.storyId || null\n};\n\nconsole.error('Workflow error:', JSON.stringify(errorResponse, null, 2));\n\nreturn [{ json: errorResponse }];"
-      },
-      "id": "handle-error",
-      "name": "Handle Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [220, 600],
-      "notes": "Captures and logs workflow errors for debugging"
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {
-          "responseCode": 500
-        }
-      },
-      "id": "error-response",
-      "name": "Error Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [440, 600],
-      "notes": "Returns error response to webhook caller"
-    }
   ],
   "connections": {
     "1. Webhook Input": {
@@ -1381,28 +1347,6 @@
         [
           {
             "node": "13. Webhook Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Error Trigger": {
-      "main": [
-        [
-          {
-            "node": "Handle Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Handle Error": {
-      "main": [
-        [
-          {
-            "node": "Error Response",
             "type": "main",
             "index": 0
           }

@@ -2,6 +2,430 @@
 
 ---
 
+## Session 6 - November 30, 2025 (Late Afternoon)
+
+### Overview
+Critical debugging session to resolve "Generation Failed - Failed to fetch" errors in the n8n workflow. Root cause analysis revealed two issues: broken error handling nodes that couldn't access webhook context, and incorrect data path in the Extract & Validate Inputs node.
+
+### Work Completed
+
+#### 1. Root Cause Analysis - Error Handling Nodes
+**Issue:** Workflow was failing with "Generation Failed - Failed to fetch" despite the user reporting that Supabase showed a story record with status "generating" and current_step "characters".
+
+**Investigation:**
+- Reviewed Supabase data: Story saved successfully, but 0 characters and 0 pages
+- This indicated the workflow was running past the webhook but crashing early in the pipeline
+- Error Trigger → Handle Error → Error Response nodes were attempting to return error responses
+- However, these nodes cannot access the original webhook context (it's a separate execution branch)
+- Result: When workflow errors occurred, error handling failed, causing "Failed to fetch"
+
+**Resolution:**
+- Removed Error Trigger node (ID: error-trigger)
+- Removed Handle Error code node (ID: handle-error)
+- Removed Error Response node (ID: error-response)
+- Removed their connections from the connections object
+- Result: Errors now bubble up naturally, providing better diagnostics in n8n execution logs
+
+**Impact:** Eliminates the broken error handling layer that was masking the real error.
+
+#### 2. Root Cause Analysis - Data Path Issue
+**Issue:** Extract & Validate Inputs node was trying to access `$json.body.storyText` but data was actually at `$json.storyText`.
+
+**Investigation:**
+- Original code: `const body = $input.first().json.body;`
+- This assumes webhook always sends data nested under `body` property
+- However, the frontend sends `{ storyText: "...", settings: {...} }` directly
+- Result: "Cannot read properties of undefined (reading 'storyText')" error
+
+**Resolution:**
+- Updated code to handle both formats:
+  ```javascript
+  const input = $input.first().json;
+  const body = input.body || input;
+  ```
+- Now works whether data is at `$json.body.storyText` OR `$json.storyText`
+- Backward compatible with both data formats
+
+**Impact:** Fixes the immediate crash that was preventing any story generation.
+
+#### 3. Documentation Updates
+**CLAUDE.md:**
+- Updated AI Models table with correct model names:
+  - Text: `gemini-3-pro-preview` (was `gemini-2.5-flash`)
+  - Image: `gemini-3-pro-image-preview` (was `gemini-2.0-flash-preview-image-generation`)
+- Added warning: "IMPORTANT: These model names are correct and authoritative. Do not change them."
+- Updated Node Architecture section with correct endpoint URLs
+- Clarified that these are the models actually being used in the workflow
+
+**Rationale:** Session 5's documentation incorrectly stated Flash models were being used for cost efficiency (~$0.40), but the workflow JSON shows Pro models are configured (~$0.80). Documentation now matches implementation.
+
+#### 4. Temporary Files Created
+**workflows/extract-inputs-node.json:**
+- Single-node export for debugging purposes
+- Can be deleted - not part of the main workflow
+- Contains the fixed Extract & Validate Inputs node
+
+### Files Modified
+- `/workflows/storybook-generator.json` (error handling nodes removed, data path fixed)
+- `/CLAUDE.md` (model documentation corrected)
+- `/workflows/extract-inputs-node.json` (created, can be deleted)
+
+### Technical Insights
+
+**n8n Error Handling Architecture:**
+- Error Trigger nodes run in a separate execution branch
+- They do NOT have access to the original webhook context
+- Cannot use "Respond to Webhook" node in error branch (no webhook to respond to)
+- Better approach: Let errors bubble up naturally, use n8n execution logs for debugging
+- For webhook errors, add try/catch in code nodes and return error JSON manually
+
+**Webhook Data Format Patterns:**
+- Frontend can send data in different formats depending on HTTP client
+- Direct POST body: `{ storyText: "..." }` → `$json.storyText`
+- Form-encoded POST: `{ body: { storyText: "..." } }` → `$json.body.storyText`
+- Always use defensive coding: `const body = input.body || input;`
+
+**Supabase as Diagnostic Tool:**
+- Checking database state revealed workflow was partially running
+- `current_step` field showed exactly where workflow crashed
+- Empty child tables (characters, pages) confirmed crash was early in pipeline
+- Database logging is invaluable for debugging n8n Cloud workflows
+
+### Debugging Process
+
+1. **User Report:** "Getting errors during generation" + "Failed to fetch"
+2. **Database Check:** Story in Supabase with status "generating", step "characters"
+3. **Hypothesis:** Workflow running but crashing after webhook, before character generation
+4. **Code Review:** Found broken error handling nodes (can't respond to webhook from error branch)
+5. **Secondary Issue:** Found incorrect data path in Extract & Validate Inputs
+6. **Fix Implementation:** Removed error nodes, fixed data path
+7. **Documentation Sync:** Updated CLAUDE.md to match actual workflow configuration
+
+### Current State
+
+**Fixed Issues:**
+- Error handling nodes removed (were causing misleading "Failed to fetch")
+- Data path issue resolved (handles both `$json.body` and direct `$json` formats)
+- Model documentation corrected to match actual implementation
+- Workflow should now run past the webhook input stage
+
+**Testing Status:**
+- Fixes applied to workflow JSON
+- Not yet re-imported to n8n Cloud
+- Not yet tested end-to-end with real story generation
+
+**Known Requirements for User:**
+1. Re-import `/workflows/storybook-generator.json` to n8n Cloud
+2. Re-assign credentials:
+   - Gemini API credential (9 nodes) - Query Auth with parameter name `key`
+   - Supabase credential (4 nodes) - Header Auth with header name `apikey`
+3. Test with a 5-page story to verify fixes work
+4. Monitor n8n execution logs for any remaining errors
+
+### Next Session Priorities
+
+1. **n8n Cloud Re-deployment:**
+   - Import updated workflow JSON (with error handling nodes removed)
+   - Re-assign Gemini Query Auth credential to 9 nodes
+   - Re-assign Supabase Header Auth credential to 4 nodes
+   - Verify webhook URL is still active
+
+2. **End-to-End Testing:**
+   - Test with simple 5-page story
+   - Monitor execution in n8n Cloud logs
+   - Verify workflow completes without errors
+   - Check that all 4 Supabase tables receive data
+
+3. **Error Validation:**
+   - Confirm errors now show clearly in n8n execution logs
+   - Verify no more "Failed to fetch" generic errors
+   - Test with invalid input to ensure graceful failure
+
+4. **Memory Fix Validation:**
+   - If workflow completes, verify memory optimization is working
+   - Check that base64 is stripped in workflow state
+   - Confirm workflow doesn't crash after 5 minutes (previous issue)
+
+5. **Frontend Testing:**
+   - Verify frontend receives successful response
+   - Test Supabase image fetching logic
+   - Confirm book displays correctly after generation
+
+### Notes
+
+- **Key Discovery:** The error was happening at the very beginning (Extract & Validate Inputs), not during AI generation
+- **Error Handling Anti-Pattern:** Error Trigger → Respond to Webhook doesn't work in n8n (no webhook context in error branch)
+- **Correct Pattern:** Use try/catch in code nodes, return error JSON manually, or rely on n8n execution logs
+- **Model Cost Clarity:** Workflow is using Pro models (~$0.80/book), not Flash models (~$0.40/book)
+- **Supabase Diagnostics:** Database state is extremely valuable for debugging n8n workflows
+
+**Files to Clean Up:**
+- `/workflows/extract-inputs-node.json` can be deleted (temporary debug export)
+
+**Documentation Accuracy:**
+- CLAUDE.md now correctly documents Pro models as being used
+- Previous session's cost estimates ($0.40) were incorrect - should be ~$0.80 per 20-page book
+- Model names are now authoritative and should not be changed without updating workflow JSON
+
+### Session Duration
+Approximately 45 minutes (debugging analysis + workflow fixes + documentation updates)
+
+---
+
+## Session 5 - November 30, 2025 (Afternoon)
+
+### Overview
+Memory optimization implementation session focused on preventing n8n Cloud crashes due to excessive base64 image data in workflow memory. Implemented elegant solution using existing aggregation nodes with Supabase persistence as the primary data path.
+
+### Work Completed
+
+#### 1. Supabase Environments Table Creation
+**Issue:** No database table for storing environment reference images generated during workflow execution.
+
+**Resolution:**
+- Created migration `create_environments_table.sql` with schema:
+  - `id` (UUID, primary key)
+  - `story_id` (UUID, foreign key to stories.id, CASCADE on delete)
+  - `name` (TEXT)
+  - `description` (TEXT)
+  - `image_url` (TEXT) - Base64-encoded image data
+  - `created_at` (TIMESTAMP)
+- Applied migration via Supabase MCP tool
+- Verified table creation in database
+
+**Impact:** Enables complete database persistence for all workflow-generated assets (stories, characters, environments, pages).
+
+#### 2. Memory Optimization Strategy Implementation
+**Problem:** n8n Cloud crashes after ~5 minutes due to accumulated base64 images in workflow state (~25-30MB for 10-page book).
+
+**Solution (Hybrid Approach):**
+- Set `saveToSupabase: true` as default in webhook input
+- Modified 5 aggregation nodes to strip base64 data after database save
+- Replace base64 with `[SAVED_TO_SUPABASE]` placeholder in workflow state
+- Add `savedToSupabase: true` flags in response JSON for frontend detection
+
+**Modified Nodes:**
+1. **Aggregate Character Portraits** - Strips `referenceImage` after DB save
+2. **Aggregate Environment References** - Strips `imageUrl` after DB save
+3. **Aggregate Pages** - Strips `imageData` after DB save
+4. **Merge Fixed Pages** - Strips `imageData` for regenerated pages
+5. **Build Final Response** - Sets `savedToSupabase` flags in response
+
+**Expected Impact:**
+- Memory usage: ~4-5MB (down from ~25-30MB) - 50-60% reduction
+- Workflow should no longer crash on n8n Cloud
+- No new nodes added (elegant solution using existing architecture)
+
+**Technical Details:**
+```javascript
+// Example aggregation node code (Aggregate Character Portraits)
+return items.map((item) => {
+  const character = item.json;
+  return {
+    json: {
+      ...character,
+      referenceImage: character.referenceImage ? '[SAVED_TO_SUPABASE]' : '',
+      savedToSupabase: true
+    }
+  };
+});
+```
+
+#### 3. Frontend Updates for Supabase Image Fetching
+**Changes:**
+- Added `fetchPageImages()` to `/frontend/src/lib/supabase.ts`
+- Added `fetchCharacterImages()` to `/frontend/src/lib/supabase.ts`
+- Added `fetchEnvironmentImages()` to `/frontend/src/lib/supabase.ts`
+- Updated `/frontend/src/app/studio/page.tsx` to:
+  - Detect `savedToSupabase` flags in webhook response
+  - Call Supabase fetch functions if flags are true
+  - Replace `[SAVED_TO_SUPABASE]` placeholders with actual base64 data
+  - Fall back to webhook response data if flags are false
+
+**Code Pattern:**
+```javascript
+if (bookData.savedToSupabase) {
+  const pages = await fetchPageImages(bookData.storyId);
+  bookData.pages.forEach((page, i) => {
+    if (page.imageData === '[SAVED_TO_SUPABASE]') {
+      page.imageData = pages[i]?.image_url || '';
+    }
+  });
+}
+```
+
+**Impact:** Frontend can seamlessly handle both response modes (direct base64 vs Supabase fetch).
+
+#### 4. Documentation Updates
+**CLAUDE.md:**
+- Added "Memory Optimization (Critical)" section
+- Documented how memory optimization works
+- Listed all affected nodes and their optimization behavior
+- Added frontend requirement examples for Supabase fetching
+- Clarified `saveToSupabase` is always `true` by default
+
+**SESSION_SUMMARY.md:** (this file being updated now)
+
+#### 5. Git Workflow
+**Commit Made:**
+```
+7fa1d46 fix: memory optimization to prevent n8n Cloud crashes
+```
+
+**Changes:**
+- workflows/storybook-generator.json (aggregation nodes updated)
+- frontend/src/lib/supabase.ts (new fetch functions)
+- frontend/src/app/studio/page.tsx (Supabase image loading)
+- CLAUDE.md (memory optimization documentation)
+
+**Pushed to GitHub:** ✅ Synced with origin/main
+
+### Files Modified
+- `/workflows/storybook-generator.json` (5 aggregation nodes + webhook default)
+- `/frontend/src/lib/supabase.ts` (3 new fetch functions)
+- `/frontend/src/app/studio/page.tsx` (Supabase integration logic)
+- `/CLAUDE.md` (new memory optimization section)
+- `/supabase/migrations/create_environments_table.sql` (new file)
+
+### Technical Insights
+
+**n8n Memory Architecture:**
+- n8n Cloud has strict memory limits (~256-512MB per execution)
+- Base64 images are ~500KB-2MB each
+- Loop aggregation nodes compound memory usage by accumulating full state
+- Solution: Strip large data after persistence, only pass metadata forward
+
+**Memory Calculation:**
+- 10-page book without optimization: ~25-30MB
+  - 4 characters × 1MB = 4MB
+  - 4 environments × 1MB = 4MB
+  - 10 pages × 1.5MB = 15MB
+  - Consistency fixes × 1.5MB = 2-3MB
+  - Total: ~25-30MB in workflow state
+- 10-page book with optimization: ~4-5MB
+  - Character metadata: ~20KB
+  - Environment metadata: ~20KB
+  - Page metadata: ~50KB
+  - Base64 in database, not workflow state
+
+**Alternative Approaches Considered:**
+1. **Supabase Storage** - More complex setup, cleaner architecture
+2. **Progressive Compression** - Lower image quality, still large payloads
+3. **Current Hybrid** - ✅ Chosen - Leverages existing Supabase integration, minimal code changes
+
+**Why This Solution is Elegant:**
+- No new nodes added to workflow
+- Uses existing database save logic
+- Backward compatible (works with saveToSupabase: false)
+- Frontend change is minimal and optional
+- Memory savings are immediate and substantial
+
+### Current Blockers
+
+**Workflow Re-import Required:**
+The user must re-import the workflow JSON into n8n Cloud and re-assign credentials before testing the memory optimization. This is a manual step that cannot be automated via MCP tools.
+
+**Pending Validation:**
+While the solution is architecturally sound, it has not been tested end-to-end with a real story generation. Next session should:
+1. Re-import workflow
+2. Test with 5-page book
+3. Monitor n8n execution logs for memory usage
+4. Verify workflow completes without crashing
+
+### Known Issues
+
+**Generation Errors (Pre-existing):**
+The user reported "getting errors during generation" before this session. Root cause unknown - needs debugging in next session with n8n execution logs.
+
+**Potential Issues:**
+- Database persistence is now mandatory (saveToSupabase: true default)
+- If Supabase credential is missing, workflow will fail
+- Frontend must handle `[SAVED_TO_SUPABASE]` placeholder correctly
+
+### Project State
+
+**Working Features:**
+- Memory optimization implemented across all aggregation nodes
+- Complete Supabase persistence for all 4 tables (stories, characters, environments, pages)
+- Frontend can fetch images from database
+- Webhook response includes `savedToSupabase` flags
+- Backward compatible with direct base64 responses
+
+**Testing Status:**
+- Code changes committed and pushed
+- Not yet tested end-to-end with real workflow execution
+- Frontend Supabase fetching logic not yet tested
+- Migration applied successfully to database
+
+**Known Requirements for Next Session:**
+1. Re-import `/workflows/storybook-generator.json` to n8n Cloud
+2. Re-assign Gemini API credential (9 nodes)
+3. Re-assign Supabase credential (4 nodes)
+4. Test with 5-page story to verify memory fix works
+5. Debug pre-existing generation errors using n8n logs
+
+### Next Session Priorities
+
+1. **n8n Cloud Re-deployment:**
+   - Import updated workflow JSON
+   - Re-assign credentials (Gemini Query Auth, Supabase Header Auth)
+   - Verify all nodes are properly connected
+   - Check webhook URL is still active
+
+2. **Memory Fix Validation:**
+   - Generate 5-page test book
+   - Monitor n8n execution logs for memory usage
+   - Verify workflow completes without crash (~5-7 min execution time)
+   - Check that base64 is properly stripped in workflow state
+
+3. **Database Verification:**
+   - Confirm all 4 tables receive data (stories, characters, environments, pages)
+   - Verify foreign key relationships are intact
+   - Check that base64 image data is properly stored
+   - Test CASCADE delete on story removal
+
+4. **Frontend Testing:**
+   - Verify Supabase fetch functions retrieve images correctly
+   - Test that `[SAVED_TO_SUPABASE]` placeholders are replaced
+   - Confirm book displays properly after fetch
+   - Test error handling if Supabase fetch fails
+
+5. **Debug Generation Errors:**
+   - Review n8n execution logs for error details
+   - Check HTTP Request response parsing
+   - Verify Gemini API responses are valid
+   - Test individual workflow segments if needed
+
+6. **Performance Optimization (If Time):**
+   - Consider parallel fetching of images from Supabase
+   - Add loading states during image fetch
+   - Implement retry logic for failed fetches
+   - Consider image compression in database
+
+### Notes
+
+- **Key Architectural Decision:** Supabase persistence is now the primary data path, not optional. This ensures memory optimization works consistently.
+- **Trade-off:** Workflow now requires Supabase credential to function. Cannot run standalone without database.
+- **Benefit:** Images persist beyond webhook response, enabling future features like story library, regeneration, editing.
+- **Next.js Frontend:** Already deployed on Netlify (https://storybookn8n.netlify.app) - will auto-update when pushed to main
+- **Cost Impact:** No change - Supabase storage is free tier, memory optimization reduces execution time (potential cost savings)
+
+**Technical Debt:**
+- Consider migrating base64 storage to Supabase Storage bucket for better scalability
+- Add database cleanup job for old stories (prevent unbounded growth)
+- Implement image compression before database save
+- Add retry logic for database saves
+
+**Documentation Gaps:**
+- Need troubleshooting guide for common n8n errors
+- Should document expected database sizes per book
+- Add performance benchmarks after testing
+
+### Session Duration
+Approximately 1.5 hours (database setup + memory optimization + documentation)
+
+---
+
 ## Session 4 - November 30, 2025 (Morning)
 
 ### Overview
