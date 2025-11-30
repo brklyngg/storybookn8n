@@ -110,15 +110,17 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon_key_from_supabase_dashboard>
 
 ## n8n Cloud Setup
 
-### Credential Required
-- **Type:** Header Auth
+### Credentials Required
+
+#### 1. Gemini API Key (Query Auth)
+The Gemini API requires the API key as a URL query parameter (`?key=...`). n8n automatically appends this when using Query Auth.
+
+- **Type:** Query Auth
 - **Name:** `Gemini API Key`
-- **Value:** Your API key from [Google AI Studio](https://aistudio.google.com/apikey)
+- **Parameter Name:** `key`
+- **Parameter Value:** Your API key from [Google AI Studio](https://aistudio.google.com/apikey)
 
-> **Important:** The workflow passes the API key via URL parameter (`?key=...`). The Header Auth credential is used as a secure container for the API key, which is referenced in HTTP Request URLs using `{{ $credentials.httpHeaderAuth.value }}`.
-
-### Nodes Requiring Credential
-After import, connect the `Gemini API Key` (Header Auth) credential to these 9 HTTP Request nodes:
+**Nodes requiring this credential (9 total):**
 1. 2. Story Analyzer
 2. 3. Scene Selector
 3. 4. Caption Writer
@@ -128,6 +130,21 @@ After import, connect the `Gemini API Key` (Header Auth) credential to these 9 H
 7. Generate Page Image
 8. 10. Consistency Reviewer
 9. Regenerate Page
+
+#### 2. Supabase Service Key (Header Auth)
+The Supabase REST API requires the API key as a header (`apikey: ...`). n8n automatically adds this header when using Header Auth.
+
+- **Type:** Header Auth
+- **Name:** `Supabase Service Key`
+- **Header Name:** `apikey`
+- **Header Value:** Your service_role key from Supabase Dashboard > Settings > API
+
+**Nodes requiring this credential (3 total):**
+1. 7. Save to Supabase
+2. Save Character to DB
+3. Save Page to DB
+
+> **Note:** The workflow uses Query Auth for Gemini (URL parameter) and Header Auth for Supabase (HTTP header). n8n automatically injects these credentials - no manual expression references needed.
 
 ## Features
 

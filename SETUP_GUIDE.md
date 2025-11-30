@@ -25,18 +25,21 @@ The workflow uses:
 
 ---
 
-## Step 2: Create Credential in n8n Cloud
+## Step 2: Create Gemini Credential in n8n Cloud
+
+The Gemini API requires the API key as a URL query parameter. n8n's **Query Auth** credential type handles this automatically.
 
 1. Log into your n8n Cloud instance
 2. Go to **Settings → Credentials** (or click the key icon)
 3. Click **"Add Credential"**
-4. Search for **"Header Auth"**
+4. Search for **"Query Auth"**
 5. Configure:
    - **Name:** `Gemini API Key`
+   - **Name (query parameter):** `key`
    - **Value:** Paste your Gemini API key
 6. Click **"Create"**
 
-> **Note:** The workflow passes the API key via URL parameter (`?key=...`), which the Gemini API supports. The Header Auth credential is used as a secure container for the API key, which is then referenced in the HTTP Request URLs.
+> **How it works:** When you select this credential on an HTTP Request node, n8n automatically appends `?key=YOUR_API_KEY` to the URL. No manual URL modification needed.
 
 ---
 
@@ -58,7 +61,7 @@ After import, connect your credential to each HTTP Request node:
 
 1. Click on **"2. Story Analyzer"** node
 2. In the right panel, find **"Credential to connect with"**
-3. Select your `Gemini API Key` credential (Header Auth type)
+3. Select your `Gemini API Key` credential (Query Auth type)
 4. **Repeat for these 9 nodes:**
 
 | # | Node Name | Type |
@@ -83,6 +86,8 @@ Skip this if you don't need persistence.
 
 ### Create the Credential
 
+The Supabase REST API requires authentication via the `apikey` header. n8n's **Header Auth** credential handles this automatically.
+
 1. Get your **service_role key** from Supabase:
    - Go to [supabase.com](https://supabase.com) → Your Project
    - **Settings → API → Project API keys**
@@ -91,9 +96,11 @@ Skip this if you don't need persistence.
 2. In n8n: **Settings → Credentials → Add Credential → Header Auth**
 3. Configure:
    - **Name:** `Supabase Service Key`
-   - **Name (header):** `Authorization`
-   - **Value:** `Bearer <paste your service_role key>`
+   - **Name (header):** `apikey`
+   - **Value:** Paste your service_role key (no "Bearer" prefix needed)
 4. Click **"Create"**
+
+> **How it works:** When you select this credential on an HTTP Request node, n8n automatically adds the header `apikey: YOUR_KEY` to every request.
 
 ### Connect Credential to Nodes
 
@@ -217,8 +224,8 @@ curl -X POST https://your-instance.app.n8n.cloud/webhook/generate-storybook \
 ### "401 Unauthorized" or API Key Error
 
 - Verify key at [Google AI Studio](https://aistudio.google.com/apikey)
-- Credential type must be **Header Auth**, not Google PaLM API
-- Header name must be exactly `x-goog-api-key`
+- For Gemini nodes: Credential type must be **Query Auth** with parameter name `key`
+- For Supabase nodes: Credential type must be **Header Auth** with header name `apikey`
 - Re-select credential in each HTTP Request node
 
 ### "Webhook not found" / 404

@@ -2,6 +2,189 @@
 
 ---
 
+## Session 4 - November 30, 2025 (Morning)
+
+### Overview
+Critical debugging session focused on fixing workflow crashes and data flow issues in the n8n Storybook Generator. Identified and resolved credential configuration errors and a major data preservation bug causing undefined property errors.
+
+### Work Completed
+
+#### 1. Credential Configuration Verification
+**Issue:** Confusion about which credential type to use for Gemini and Supabase APIs.
+
+**Resolution:**
+- **Gemini API:** Uses **Query Auth** credential (parameter name: `key`)
+  - API key passed as URL parameter: `?key=YOUR_KEY`
+  - n8n automatically appends this when Query Auth credential is selected
+- **Supabase API:** Uses **Header Auth** credential (header name: `apikey`)
+  - API key passed as HTTP header: `apikey: YOUR_KEY`
+  - n8n automatically adds this when Header Auth credential is selected
+
+**Impact:** Clarified correct credential configuration for both API integrations, preventing authentication errors.
+
+#### 2. Data Preservation Bug Fix
+**Issue:** HTTP Request nodes were losing `allData` object containing the `pages` array, causing "Cannot read properties of undefined (reading 'cameraAngle')" error in the Build Page Prompt code node.
+
+**Root Cause Analysis:**
+- Loop aggregation nodes (Aggregate Character Portraits, Aggregate Environment References, Aggregate Pages) were referencing their immediate predecessor HTTP Request nodes
+- HTTP Request nodes only return API response data, not the full workflow state
+- The `allData` object was being lost at each aggregation point
+
+**Fix Implementation:**
+Updated all three aggregation nodes to reference source nodes that contain `allData`:
+- **Aggregate Character Portraits:** Changed from `$('Generate Portrait')` to `$('Continue Pipeline')`
+- **Aggregate Environment References:** Changed from `$('Generate Environment Reference')` to `$('Aggregate Character Portraits')`
+- **Aggregate Pages:** Changed from `$('Generate Page Image')` to `$('Prep Page Illustrations')` or `$('Aggregate Environment References')`
+
+**Impact:** Restored complete data flow through the workflow, ensuring `pages` array and all metadata persists through the entire pipeline.
+
+#### 3. Defensive Error Handling
+Added explicit undefined check in Build Page Prompt code node:
+```javascript
+if (!page) {
+  throw new Error(`Page data is undefined at index ${i}. Check that allData.pages exists and has ${pageCount} items.`);
+}
+```
+
+**Impact:** Provides clear error messages for debugging if data flow breaks in the future.
+
+#### 4. Documentation Updates
+
+**CLAUDE.md:**
+- Rewrote credentials section with clear distinction between Query Auth (Gemini) and Header Auth (Supabase)
+- Added "How it works" explanations for each credential type
+- Listed all 9 nodes requiring Gemini credential and 3 nodes requiring Supabase credential
+- Clarified that n8n auto-injects credentials (no manual expression references needed)
+
+**SETUP_GUIDE.md:**
+- Updated Step 2 to use Query Auth for Gemini (was incorrectly showing Header Auth)
+- Changed header name from `x-goog-api-key` to parameter name `key`
+- Fixed Supabase credential from `Authorization: Bearer ...` to `apikey: ...` (no Bearer prefix)
+- Added "How it works" sections explaining automatic credential injection
+- Updated troubleshooting section with correct credential types
+
+### Files Modified
+- `/workflows/storybook-generator.json` (aggregation node references updated)
+- `/CLAUDE.md` (credentials section rewritten)
+- `/SETUP_GUIDE.md` (credential configuration corrected)
+
+### Commits Made
+1. `bdb7c8e` - fix: add JSON.stringify escaping to prevent invalid JSON errors
+2. `ce32f58` - fix: add JSON.stringify escaping to Scene Selector, Caption Writer, and Consistency Reviewer
+3. `2df3c83` - fix: preserve allData through loop aggregation nodes
+
+### Technical Insights
+
+**n8n Data Flow Patterns:**
+- Loop aggregation nodes must reference nodes that contain full workflow state, not just API responses
+- HTTP Request nodes only return `$json` from API response, losing previous workflow context
+- Use Code nodes or non-HTTP nodes as reference points to preserve `allData`
+
+**n8n Credential System:**
+- Query Auth: For API keys passed as URL parameters (Gemini, many REST APIs)
+- Header Auth: For API keys passed as HTTP headers (Supabase, authenticated APIs)
+- n8n handles credential injection automatically - no need for manual `{{ $credentials }}` references
+
+**Debugging Strategy:**
+- When seeing "Cannot read properties of undefined", check loop aggregation references first
+- Verify data is flowing through the pipeline by checking node outputs in execution logs
+- Add defensive checks in Code nodes to provide clear error messages
+
+### Current Blockers
+
+**Memory Crash Issue:**
+The workflow crashes after ~5 minutes of execution due to n8n Cloud memory limits. The root cause is accumulating base64-encoded images in the workflow state.
+
+**Current Architecture:**
+- Generate images → Store in workflow state → Pass through all nodes → Return at end
+- Each image is ~500KB-2MB in base64 format
+- 10-page book = ~5-20MB of image data in memory
+- Multiple loops compound the memory usage
+
+**Potential Solutions:**
+
+**Option A: Progressive Compression** (quickest)
+- Use `sharp` library in Code nodes to compress images to lower quality JPEG
+- Reduce from 2MB/image to ~200-500KB/image
+- Trade-off: Lower image quality in final output
+
+**Option B: Supabase Storage Integration** (recommended for production)
+- Upload images to Supabase Storage immediately after generation
+- Store only URLs in workflow state
+- Return URLs instead of base64 in final response
+- Frontend downloads images from Supabase Storage
+- Requires: Supabase Storage bucket, signed URL generation
+
+**Option C: Immediate Database Save** (hybrid approach)
+- Save images to Supabase `pages` and `characters` tables immediately during generation
+- Remove image data from workflow state after save
+- Only pass metadata through remaining nodes
+- Final response returns story ID + fetch images from database
+- Requires: Database saves to be mandatory (not optional)
+
+**Next Session Priority:** Implement Option C (immediate database save) to resolve memory crash.
+
+### Project State
+
+**Working Features:**
+- Complete 12-node workflow with proper data flow
+- Credential configuration documented and correct
+- Environment reference generation
+- Hero photo support
+- Defensive error handling
+- Loop aggregation references fixed
+
+**Testing Status:**
+- Data flow bug resolved (verified in workflow structure)
+- Not yet tested end-to-end due to memory crash blocker
+- Credential configuration verified against n8n documentation
+
+**Known Issues:**
+1. **Memory crash:** Workflow crashes after ~5 min due to accumulated base64 images
+2. **Pending end-to-end test:** Cannot complete full test run until memory issue resolved
+
+### Next Session Priorities
+
+1. **Implement Option C - Immediate Database Save:**
+   - Modify workflow to save images to Supabase immediately after generation
+   - Remove base64 data from workflow state after database save
+   - Update aggregation nodes to only pass metadata
+   - Change final response to return story ID instead of full image data
+   - Update frontend to fetch images from Supabase instead of webhook response
+
+2. **Alternative: Implement Option B - Storage Integration:**
+   - Set up Supabase Storage bucket for images
+   - Add upload logic to Code nodes after image generation
+   - Implement signed URL generation
+   - Update response format to return URLs
+   - Update frontend to display images from URLs
+
+3. **Testing After Fix:**
+   - Complete end-to-end test with real story
+   - Verify memory usage stays within n8n Cloud limits
+   - Test with 5-page, 10-page, and 20-page books
+   - Monitor execution time and API costs
+
+4. **Frontend Updates:**
+   - Update studio page to handle new response format (URLs vs base64)
+   - Add Supabase fetching logic if using database/storage approach
+   - Implement loading states for image downloads
+   - Add error handling for missing images
+
+### Notes
+
+- This session revealed critical architectural issue: n8n Cloud cannot handle large base64 payloads
+- Original Next.js app doesn't have this issue because it processes images in streaming responses
+- n8n workflow must use external storage (database or Supabase Storage) for images
+- Trade-off: More complex architecture but necessary for n8n Cloud deployment
+- Database approach (Option C) leverages existing Supabase integration
+- Storage approach (Option B) is cleaner but requires additional setup
+
+### Session Duration
+Approximately 1.5 hours (debugging + documentation updates)
+
+---
+
 ## Session 3 - November 29, 2025 (Late Evening)
 
 ### Overview
