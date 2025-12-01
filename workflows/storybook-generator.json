@@ -211,30 +211,12 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"id\": {{ JSON.stringify($json.storyId) }},\n  \"source_text\": {{ JSON.stringify($json.storyText.substring(0, 10000)) }},\n  \"settings\": {{ JSON.stringify($json.settings) }},\n  \"theme\": {{ JSON.stringify($json.analysis.theme || '') }},\n  \"title\": {{ JSON.stringify($json.analysis.title || 'Untitled') }},\n  \"status\": \"generating\",\n  \"current_step\": \"characters\"\n}",
-        "options": {
-          "timeout": 30000
-        }
+        "jsCode": "// Save story to Supabase AND return original data (not API response)\n// This fixes the data flow issue where HTTP Request loses input data\nconst data = $input.first().json;\n\ntry {\n  const response = await fetch('https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'apikey': $credentials.httpHeaderAuth.value,\n      'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n      'Prefer': 'resolution=merge-duplicates'\n    },\n    body: JSON.stringify({\n      id: data.storyId,\n      source_text: (data.storyText || '').substring(0, 10000),\n      settings: data.settings,\n      theme: data.analysis?.theme || '',\n      title: data.analysis?.title || 'Untitled',\n      status: 'generating',\n      current_step: 'characters'\n    })\n  });\n  \n  if (!response.ok) {\n    console.error('Supabase save failed:', response.status);\n  }\n} catch (e) {\n  console.error('Supabase save error:', e.message);\n}\n\n// CRITICAL: Return original data, not API response\nreturn [{ json: data }];"
       },
       "id": "save-story-supabase",
       "name": "7. Save to Supabase",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [2420, 200],
       "credentials": {
         "httpHeaderAuth": {
@@ -242,18 +224,18 @@
           "name": "Supabase Service Key"
         }
       },
-      "onError": "continueErrorOutput"
+      "notes": "Saves story metadata to Supabase AND passes original data through (Code node instead of HTTP Request)"
     },
     {
       "parameters": {
-        "jsCode": "// Merge branches - get original data from IF node, not from Supabase HTTP response\n// The HTTP Request node returns API response, not original data\nconst ifNodeData = $('Save to Supabase?').first().json;\nreturn [{ json: ifNodeData }];"
+        "jsCode": "// Simply pass through data from whichever branch executed\nconst data = $input.first().json;\nreturn [{ json: data }];"
       },
       "id": "merge-supabase",
       "name": "Continue Pipeline",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [2640, 300],
-      "notes": "Merge point after optional Supabase save"
+      "notes": "Merge point after optional Supabase save - just passes data through"
     },
     {
       "parameters": {
