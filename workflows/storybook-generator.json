@@ -8,23 +8,29 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook-input",
+      "id": "9e2945c6-bb3b-4cb5-a2de-a858af6d7b90",
       "name": "1. Webhook Input",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 300],
+      "position": [
+        0,
+        300
+      ],
       "webhookId": "storybook-generator-webhook"
     },
     {
       "parameters": {
-        "jsCode": "// Extract and validate all inputs in one place\n// Handle both direct body and nested body formats\nconst input = $input.first().json;\nconst body = input.body || input;\n\nconst storyText = body.storyText || '';\nconst settings = body.settings || {};\n\n// Hero image support - base64 encoded custom protagonist photo\nconst heroImage = settings.heroImage || body.heroImage || null;\n\nreturn [{\n  json: {\n    storyText,\n    settings,\n    storyId: body.storyId || crypto.randomUUID(),\n    targetAge: settings.targetAge || 6,\n    desiredPageCount: settings.desiredPageCount || 10,\n    intensity: settings.harshness || 5,\n    aestheticStyle: settings.aestheticStyle || 'watercolor children\\'s book illustration',\n    freeformNotes: settings.freeformNotes || '',\n    saveToSupabase: true,\n    heroImage: heroImage\n  }\n}];"
+        "jsCode": "// LIGHTWEIGHT WEBHOOK: Fetch story from Supabase instead of receiving in payload\n// This fixes n8n Cloud crashes with large story texts\nconst input = $input.first().json;\nconst body = input.body || input;\n\nconst storyId = body.storyId;\nconst settings = body.settings || {};\n\n// Fetch full story text from Supabase (not from webhook payload)\nlet storyText = '';\ntry {\n  const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpudnFxbnJ3dXpqdGRncWxrZ3ZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwMjU4MjEsImV4cCI6MjA3OTYwMTgyMX0.H00iMCd0pEcq5W_hkVlIaJgqvfXRLKkLgV5XjfINhzM';\n  const response = await fetch(\n    `https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories?id=eq.${storyId}&select=source_text`,\n    {\n      headers: {\n        'apikey': supabaseAnonKey,\n        'Authorization': `Bearer ${supabaseAnonKey}`\n      }\n    }\n  );\n  const data = await response.json();\n  storyText = data[0]?.source_text || '';\n  console.log('Fetched story from Supabase:', storyText.substring(0, 100) + '...');\n} catch (e) {\n  console.error('Failed to fetch story from Supabase:', e.message);\n  // Fallback to webhook payload if fetch fails\n  storyText = body.storyText || '';\n}\n\n// Hero image support - base64 encoded custom protagonist photo\nconst heroImage = settings.heroImage || body.heroImage || null;\n\nreturn [{\n  json: {\n    storyText,\n    settings,\n    storyId: storyId || crypto.randomUUID(),\n    targetAge: settings.targetAge || 6,\n    desiredPageCount: settings.desiredPageCount || 10,\n    intensity: settings.harshness || 5,\n    aestheticStyle: settings.aestheticStyle || 'watercolor children\\'s book illustration',\n    freeformNotes: settings.freeformNotes || '',\n    saveToSupabase: true,\n    heroImage: heroImage\n  }\n}];"
       },
-      "id": "extract-inputs",
+      "id": "0a155b51-edb0-4ce1-a581-143b8be1d537",
       "name": "Extract & Validate Inputs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 300],
-      "notes": "Consolidated input extraction with defaults, validation, and hero image support"
+      "position": [
+        220,
+        300
+      ],
+      "notes": "MEMORY FIX: Fetches story from Supabase instead of webhook payload to handle any story size"
     },
     {
       "parameters": {
@@ -44,11 +50,14 @@
           }
         }
       },
-      "id": "story-analyzer",
+      "id": "31388475-faf8-4b69-aa57-382265f6c6a0",
       "name": "2. Story Analyzer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [440, 300],
+      "position": [
+        440,
+        300
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -62,11 +71,14 @@
       "parameters": {
         "jsCode": "// Unified JSON parser - reusable pattern for all AI responses\nfunction parseAIResponse(responseText, fallback = {}) {\n  try {\n    // Handle Gemini API response structure\n    let text = responseText;\n    if (typeof responseText === 'object') {\n      text = responseText?.candidates?.[0]?.content?.parts?.[0]?.text || \n             responseText?.text || \n             JSON.stringify(responseText);\n    }\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      return JSON.parse(jsonMatch[0]);\n    }\n  } catch (e) {\n    console.error('JSON parse error:', e.message);\n  }\n  return { ...fallback, parseError: true, rawResponse: String(responseText).substring(0, 500) };\n}\n\nconst responseBody = $input.first().json.body || $input.first().json;\nconst analysis = parseAIResponse(responseBody, {\n  title: 'Untitled Story',\n  theme: 'Unknown',\n  keyMoments: [],\n  keyEnvironments: [],\n  tone: 'neutral'\n});\n\n// Carry forward all previous data\nconst prevData = $('Extract & Validate Inputs').first().json;\n\nreturn [{\n  json: {\n    ...prevData,\n    analysis\n  }\n}];"
       },
-      "id": "parse-analysis",
+      "id": "16da2be7-2e48-4795-af87-cab57408e3ed",
       "name": "Parse Story Analysis",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 300]
+      "position": [
+        660,
+        300
+      ]
     },
     {
       "parameters": {
@@ -81,11 +93,14 @@
           "timeout": 60000
         }
       },
-      "id": "scene-selector",
+      "id": "f2a87cb3-b4dc-4ff8-936d-60b92fcec9d9",
       "name": "3. Scene Selector",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, 300],
+      "position": [
+        880,
+        300
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -99,11 +114,14 @@
       "parameters": {
         "jsCode": "function parseAIResponse(responseText, fallback = {}) {\n  try {\n    let text = responseText;\n    if (typeof responseText === 'object') {\n      text = responseText?.candidates?.[0]?.content?.parts?.[0]?.text || \n             responseText?.text || \n             JSON.stringify(responseText);\n    }\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) return JSON.parse(jsonMatch[0]);\n  } catch (e) { console.error('Parse error:', e.message); }\n  return { ...fallback, parseError: true };\n}\n\nconst responseBody = $input.first().json.body || $input.first().json;\nconst sceneData = parseAIResponse(responseBody, { scenes: [], storyArcSummary: [] });\n\nconst prevData = $('Parse Story Analysis').first().json;\n\nreturn [{\n  json: {\n    ...prevData,\n    scenes: sceneData.scenes || [],\n    storyArcSummary: sceneData.storyArcSummary || []\n  }\n}];"
       },
-      "id": "parse-scenes",
+      "id": "bdea8504-0a1a-4ba5-a9af-3db9769c188f",
       "name": "Parse Scenes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 300]
+      "position": [
+        1100,
+        300
+      ]
     },
     {
       "parameters": {
@@ -118,11 +136,14 @@
           "timeout": 60000
         }
       },
-      "id": "caption-writer",
+      "id": "3771dba0-9e91-47fd-92b1-23ce7380b73a",
       "name": "4. Caption Writer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1320, 300],
+      "position": [
+        1320,
+        300
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -136,11 +157,14 @@
       "parameters": {
         "jsCode": "function parseAIResponse(responseText, fallback = {}) {\n  try {\n    let text = responseText;\n    if (typeof responseText === 'object') {\n      text = responseText?.candidates?.[0]?.content?.parts?.[0]?.text || \n             responseText?.text || \n             JSON.stringify(responseText);\n    }\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) return JSON.parse(jsonMatch[0]);\n  } catch (e) { console.error('Parse error:', e.message); }\n  return { ...fallback, parseError: true };\n}\n\nconst responseBody = $input.first().json.body || $input.first().json;\nconst captionData = parseAIResponse(responseBody, { captions: [] });\n\nconst prevData = $('Parse Scenes').first().json;\n\n// Merge captions into scenes to create pages\nconst pages = prevData.scenes.map((scene, idx) => {\n  const caption = captionData.captions?.find(c => c.pageNumber === scene.pageNumber);\n  return {\n    ...scene,\n    caption: caption?.caption || `Page ${scene.pageNumber}`\n  };\n});\n\nreturn [{\n  json: {\n    ...prevData,\n    pages\n  }\n}];"
       },
-      "id": "parse-captions",
+      "id": "0c482521-7f6a-4c21-a487-59bacd8497b5",
       "name": "Parse Captions & Build Pages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1540, 300]
+      "position": [
+        1540,
+        300
+      ]
     },
     {
       "parameters": {
@@ -155,11 +179,14 @@
           "timeout": 60000
         }
       },
-      "id": "character-extractor",
+      "id": "a57eda6f-b92f-45f7-b26a-baa981445a98",
       "name": "5. Character Extractor",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1760, 300],
+      "position": [
+        1760,
+        300
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -173,11 +200,14 @@
       "parameters": {
         "jsCode": "// Parse characters AND create Style Bible in one node\n// Also extracts environments for reference generation\n\nfunction parseAIResponse(responseText, fallback = {}) {\n  try {\n    let text = responseText;\n    if (typeof responseText === 'object') {\n      text = responseText?.candidates?.[0]?.content?.parts?.[0]?.text || \n             responseText?.text || \n             JSON.stringify(responseText);\n    }\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) return JSON.parse(jsonMatch[0]);\n  } catch (e) { console.error('Parse error:', e.message); }\n  return { ...fallback, parseError: true };\n}\n\nconst responseBody = $input.first().json.body || $input.first().json;\nconst charData = parseAIResponse(responseBody, { characters: [] });\n\nconst prevData = $('Parse Captions & Build Pages').first().json;\nconst style = (prevData.aestheticStyle || '').toLowerCase();\n\n// Mark hero character and attach hero image if provided\nconst characters = (charData.characters || []).map((char, idx) => {\n  if (char.isHero && prevData.heroImage) {\n    return { ...char, heroImageProvided: true };\n  }\n  return char;\n});\n\n// Extract unique environments from scenes and analysis\nconst sceneEnvironments = [...new Set(prevData.pages?.map(p => p.environment).filter(Boolean) || [])];\nconst analysisEnvironments = prevData.analysis?.keyEnvironments || [];\nconst allEnvironments = [...new Set([...sceneEnvironments, ...analysisEnvironments])].slice(0, 5);\n\n// Style Bible creation\nfunction extractArtStyle(s) {\n  if (s.includes('watercolor')) return 'watercolor illustration';\n  if (s.includes('cartoon')) return 'cartoon style';\n  if (s.includes('digital')) return 'digital art';\n  if (s.includes('sketch')) return 'sketch illustration';\n  if (s.includes('pixar') || s.includes('3d')) return 'Pixar-style 3D render';\n  if (s.includes('paper') || s.includes('cutout')) return 'paper cutout style';\n  return 'children\\'s book illustration style';\n}\n\nfunction extractColorPalette(s) {\n  if (s.includes('warm')) return 'warm, inviting colors';\n  if (s.includes('pastel')) return 'soft pastel tones';\n  if (s.includes('bright')) return 'bright, cheerful colors';\n  if (s.includes('muted')) return 'muted, gentle tones';\n  return 'child-friendly color palette';\n}\n\nfunction extractLighting(s) {\n  if (s.includes('soft')) return 'soft, diffused lighting';\n  if (s.includes('golden')) return 'warm golden hour lighting';\n  if (s.includes('bright')) return 'bright, even lighting';\n  return 'gentle, natural lighting';\n}\n\nfunction getVisualDensity(age) {\n  if (age <= 5) return 'Simple, bold elements, large shapes, minimal background, high contrast';\n  if (age <= 8) return 'Moderate detail, engaging backgrounds, balanced complexity';\n  if (age <= 12) return 'Rich, intricate details, layered compositions, complex backgrounds';\n  return 'Advanced visual complexity, mature artistic techniques';\n}\n\nconst styleBible = {\n  artStyle: extractArtStyle(style),\n  colorPalette: extractColorPalette(style),\n  lighting: extractLighting(style),\n  composition: 'child-friendly perspective, clear focal points, intricate backgrounds',\n  visualDensity: getVisualDensity(prevData.targetAge),\n  doNots: [\n    'dark shadows',\n    'scary elements', \n    'violent imagery',\n    'any text, captions, or typography in the image',\n    'speech bubbles',\n    'signs with readable text'\n  ]\n};\n\nreturn [{\n  json: {\n    ...prevData,\n    characters,\n    environments: allEnvironments,\n    styleBible\n  }\n}];"
       },
-      "id": "parse-characters-and-style",
+      "id": "0f5ff7c3-5591-438a-9b27-c0c804d7c497",
       "name": "6. Parse Characters & Create Style Bible",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1980, 300],
+      "position": [
+        1980,
+        300
+      ],
       "notes": "ADJUSTABLE: Edit style functions. Also extracts environments for reference generation."
     },
     {
@@ -203,21 +233,27 @@
         },
         "options": {}
       },
-      "id": "check-supabase",
+      "id": "3a798919-fe91-47aa-8a88-106677767564",
       "name": "Save to Supabase?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2200, 300]
+      "position": [
+        2200,
+        300
+      ]
     },
     {
       "parameters": {
         "jsCode": "// Save story to Supabase AND return original data (not API response)\n// This fixes the data flow issue where HTTP Request loses input data\nconst data = $input.first().json;\n\ntry {\n  const response = await fetch('https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'apikey': $credentials.httpHeaderAuth.value,\n      'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n      'Prefer': 'resolution=merge-duplicates'\n    },\n    body: JSON.stringify({\n      id: data.storyId,\n      source_text: (data.storyText || '').substring(0, 10000),\n      settings: data.settings,\n      theme: data.analysis?.theme || '',\n      title: data.analysis?.title || 'Untitled',\n      status: 'generating',\n      current_step: 'characters'\n    })\n  });\n  \n  if (!response.ok) {\n    console.error('Supabase save failed:', response.status);\n  }\n} catch (e) {\n  console.error('Supabase save error:', e.message);\n}\n\n// CRITICAL: Return original data, not API response\nreturn [{ json: data }];"
       },
-      "id": "save-story-supabase",
+      "id": "aa491d2f-748d-4527-bae5-4579c32924ca",
       "name": "7. Save to Supabase",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2420, 200],
+      "position": [
+        2420,
+        200
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "anXAvdazFeZf1z1L",
@@ -230,22 +266,28 @@
       "parameters": {
         "jsCode": "// Simply pass through data from whichever branch executed\nconst data = $input.first().json;\nreturn [{ json: data }];"
       },
-      "id": "merge-supabase",
+      "id": "99af69df-fcd7-427b-8c3e-a1293aa01b79",
       "name": "Continue Pipeline",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2640, 300],
+      "position": [
+        2640,
+        300
+      ],
       "notes": "Merge point after optional Supabase save - just passes data through"
     },
     {
       "parameters": {
         "jsCode": "// Prepare characters for portrait generation loop\nconst data = $input.first().json;\nconst characters = (data.characters || []).filter(c => c.role === 'main' || c.role === 'supporting' || c.isHero);\n\n// Only generate portraits for main, supporting, and hero characters\nif (characters.length === 0) {\n  return [{\n    json: {\n      ...data,\n      characterReferences: [],\n      skipPortraitGeneration: true\n    }\n  }];\n}\n\nreturn characters.map((char, idx) => ({\n  json: {\n    characterIndex: idx,\n    character: char,\n    storyId: data.storyId,\n    aestheticStyle: data.aestheticStyle,\n    targetAge: data.targetAge,\n    styleBible: data.styleBible,\n    totalCharacters: characters.length,\n    heroImage: char.isHero ? data.heroImage : null,\n    allData: data\n  }\n}));"
       },
-      "id": "prep-character-loop",
+      "id": "4cb02d88-2222-4e3f-993e-49a292a87096",
       "name": "Prep Character Portraits",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2860, 300],
+      "position": [
+        2860,
+        300
+      ],
       "notes": "Processes main, supporting, and hero characters. Passes hero image for protagonist."
     },
     {
@@ -253,11 +295,14 @@
         "batchSize": 1,
         "options": {}
       },
-      "id": "character-loop",
+      "id": "45926580-bff2-4707-a182-1c9b6f2d0c5b",
       "name": "8. Character Portrait Loop",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [3080, 300],
+      "position": [
+        3080,
+        300
+      ],
       "notes": "ADJUSTABLE: Change batchSize to process more characters in parallel (may hit rate limits)."
     },
     {
@@ -273,11 +318,14 @@
           "timeout": 120000
         }
       },
-      "id": "generate-character-portrait",
+      "id": "36fa9d1f-4342-4dca-8377-5eed562cebd8",
       "name": "Generate Portrait",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3300, 300],
+      "position": [
+        3300,
+        300
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -291,11 +339,14 @@
       "parameters": {
         "jsCode": "// MEMORY FIX: Parse, Save to Supabase, and STRIP base64 before returning to loop\n// This prevents base64 accumulation in SplitInBatches node\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet referenceImage = null;\n\n// Extract image from Gemini response\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        referenceImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (referenceImage) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nconst storyId = data.storyId;\nconst characterName = data.character?.name || '';\nconst characterDescription = data.character?.description || '';\nconst characterRole = data.character?.role || 'supporting';\nconst isHero = data.character?.isHero || false;\nconst keyFeatures = data.character?.keyFeatures || [];\n\n// Save to Supabase immediately (saveToSupabase is always true)\nlet savedOk = false;\nif (referenceImage) {\n  try {\n    const supabaseUrl = 'https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/characters';\n    const response = await fetch(supabaseUrl, {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': $credentials.httpHeaderAuth.value,\n        'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify({\n        story_id: storyId,\n        name: characterName,\n        description: characterDescription,\n        role: characterRole,\n        is_hero: isHero,\n        reference_image: referenceImage,\n        status: 'completed'\n      })\n    });\n    savedOk = response.ok;\n    if (!response.ok) {\n      console.error('Supabase save failed:', response.status);\n    }\n  } catch (e) {\n    console.error('Supabase save error:', e.message);\n  }\n}\n\n// CRITICAL: Return ONLY metadata - NO base64!\n// This prevents memory accumulation in the loop\nreturn [{\n  json: {\n    // Minimal metadata for aggregation\n    characterName,\n    characterRole,\n    characterDescription,\n    isHero,\n    keyFeatures,\n    savedToSupabase: savedOk,\n    hasImage: !!referenceImage,\n    // Keep storyId for reference\n    storyId\n  }\n}];"
       },
-      "id": "parse-save-strip-character",
+      "id": "c530a604-f6f4-4087-9d63-f416dc27f236",
       "name": "Parse + Save + Strip Character",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3380, 300],
+      "position": [
+        3380,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "anXAvdazFeZf1z1L",
@@ -309,33 +360,42 @@
         "unit": "seconds",
         "amount": 3
       },
-      "id": "wait-between-characters",
+      "id": "a1afd76e-9877-45fc-a4a3-a3e098c1b1d5",
       "name": "Character Rate Limit",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [3800, 300],
+      "position": [
+        3800,
+        300
+      ],
       "notes": "ADJUSTABLE: Increase wait time if hitting Gemini rate limits."
     },
     {
       "parameters": {
         "jsCode": "// Aggregate character metadata - images already saved to Supabase\nconst items = $input.all();\nconst firstItem = items[0]?.json || {};\n\nlet allData;\nif (firstItem.skipPortraitGeneration) {\n  allData = firstItem;\n} else {\n  allData = $('Continue Pipeline').first().json;\n}\n\n// Items now contain clean metadata (no base64) from Parse + Save + Strip nodes\nconst characterRefs = items.map(item => {\n  if (item.json.skipPortraitGeneration) return null;\n  \n  return {\n    name: item.json.characterName,\n    role: item.json.characterRole,\n    isHero: item.json.isHero || false,\n    description: item.json.characterDescription,\n    keyFeatures: item.json.keyFeatures,\n    referenceImage: item.json.savedToSupabase ? '[SAVED_TO_SUPABASE]' : null,\n    savedToSupabase: item.json.savedToSupabase || false\n  };\n}).filter(c => c && c.name);\n\n// Explicit field selection - no storyText (large) after this point\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    storyText: allData.storyText,\n    settings: allData.settings,\n    targetAge: allData.targetAge,\n    desiredPageCount: allData.desiredPageCount,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    heroImage: allData.heroImage,\n    analysis: allData.analysis,\n    pages: allData.pages,\n    characters: allData.characters,\n    environments: allData.environments,\n    styleBible: allData.styleBible,\n    characterReferences: characterRefs\n  }\n}];"
       },
-      "id": "aggregate-characters",
+      "id": "1ebcd374-38c7-47c4-851c-2d3d59db9eee",
       "name": "Aggregate Character Portraits",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3940, 300],
+      "position": [
+        3940,
+        300
+      ],
       "notes": "Aggregates character metadata - base64 images already saved to Supabase"
     },
     {
       "parameters": {
         "jsCode": "// Prepare environments for reference generation loop\nconst data = $input.first().json;\nconst environments = data.environments || [];\n\n// Skip if no environments identified\nif (environments.length === 0) {\n  return [{\n    json: {\n      ...data,\n      environmentReferences: [],\n      skipEnvironmentGeneration: true\n    }\n  }];\n}\n\nreturn environments.map((env, idx) => ({\n  json: {\n    environmentIndex: idx,\n    environmentName: env,\n    storyId: data.storyId,\n    aestheticStyle: data.aestheticStyle,\n    targetAge: data.targetAge,\n    styleBible: data.styleBible,\n    analysis: data.analysis,\n    totalEnvironments: environments.length,\n    allData: data\n  }\n}));"
       },
-      "id": "prep-environment-loop",
+      "id": "59af68ff-617f-49ae-a1d0-eb4233d113cf",
       "name": "Prep Environment References",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3960, 300],
+      "position": [
+        3960,
+        300
+      ],
       "notes": "Prepares up to 5 key environments for reference image generation"
     },
     {
@@ -343,11 +403,14 @@
         "batchSize": 1,
         "options": {}
       },
-      "id": "environment-loop",
+      "id": "262e1622-a691-4503-bc55-ad5f2950f83b",
       "name": "8b. Environment Reference Loop",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [4180, 300],
+      "position": [
+        4180,
+        300
+      ],
       "notes": "Generates reference images for recurring locations/environments"
     },
     {
@@ -363,11 +426,14 @@
           "timeout": 120000
         }
       },
-      "id": "generate-environment-reference",
+      "id": "44b18e54-366c-4c7e-b56f-1894eb4b8c72",
       "name": "Generate Environment Reference",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [4400, 300],
+      "position": [
+        4400,
+        300
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -381,11 +447,14 @@
       "parameters": {
         "jsCode": "// MEMORY FIX: Parse, Save to Supabase, and STRIP base64 before returning to loop\n// This prevents base64 accumulation in SplitInBatches node\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet referenceImage = null;\n\n// Extract image from Gemini response\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        referenceImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (referenceImage) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nconst storyId = data.storyId;\nconst environmentName = data.environmentName || '';\n\n// Save to Supabase immediately\nlet savedOk = false;\nif (referenceImage) {\n  try {\n    const supabaseUrl = 'https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/environments';\n    const response = await fetch(supabaseUrl, {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': $credentials.httpHeaderAuth.value,\n        'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify({\n        story_id: storyId,\n        name: environmentName,\n        reference_image: referenceImage,\n        status: 'completed'\n      })\n    });\n    savedOk = response.ok;\n    if (!response.ok) {\n      console.error('Supabase save failed:', response.status);\n    }\n  } catch (e) {\n    console.error('Supabase save error:', e.message);\n  }\n}\n\n// CRITICAL: Return ONLY metadata - NO base64!\nreturn [{\n  json: {\n    environmentName,\n    savedToSupabase: savedOk,\n    hasImage: !!referenceImage,\n    storyId\n  }\n}];"
       },
-      "id": "parse-save-strip-environment",
+      "id": "9c0c647e-31d2-4553-8129-1ec92e72fc49",
       "name": "Parse + Save + Strip Environment",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [4520, 300],
+      "position": [
+        4520,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "anXAvdazFeZf1z1L",
@@ -399,54 +468,69 @@
         "unit": "seconds",
         "amount": 3
       },
-      "id": "wait-between-environments",
+      "id": "0804b008-96cd-4448-8c2f-37505a1715e2",
       "name": "Environment Rate Limit",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [4720, 300]
+      "position": [
+        4720,
+        300
+      ]
     },
     {
       "parameters": {
         "jsCode": "// Aggregate environment metadata - images already saved to Supabase\nconst items = $input.all();\nconst firstItem = items[0]?.json || {};\n\nlet allData;\nif (firstItem.skipEnvironmentGeneration) {\n  allData = firstItem;\n} else {\n  allData = $('Aggregate Character Portraits').first().json;\n}\n\n// Items now contain clean metadata (no base64) from Parse + Save + Strip nodes\nconst environmentRefs = items.map(item => {\n  if (item.json.skipEnvironmentGeneration) return null;\n  \n  return {\n    name: item.json.environmentName,\n    referenceImage: item.json.savedToSupabase ? '[SAVED_TO_SUPABASE]' : null,\n    savedToSupabase: item.json.savedToSupabase || false\n  };\n}).filter(e => e && e.name);\n\n// Explicit field selection\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    storyText: allData.storyText,\n    settings: allData.settings,\n    targetAge: allData.targetAge,\n    desiredPageCount: allData.desiredPageCount,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    heroImage: allData.heroImage,\n    analysis: allData.analysis,\n    pages: allData.pages,\n    characters: allData.characters,\n    environments: allData.environments,\n    styleBible: allData.styleBible,\n    characterReferences: allData.characterReferences,\n    environmentReferences: environmentRefs\n  }\n}];"
       },
-      "id": "aggregate-environments",
+      "id": "9fab3f3f-26d6-4fa2-8c91-a87fa8a7c92b",
       "name": "Aggregate Environment References",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [4940, 300],
+      "position": [
+        4940,
+        300
+      ],
       "notes": "Aggregates environment metadata - base64 images already saved to Supabase"
     },
     {
       "parameters": {
         "jsCode": "// Prepare pages for illustration loop\nconst data = $input.first().json;\nconst pages = data.pages || [];\n\nif (pages.length === 0) {\n  return [{ json: { ...data, generatedPages: [], error: 'No pages to generate' } }];\n}\n\nreturn pages.map((page, idx) => ({\n  json: {\n    pageIndex: idx,\n    page: page,\n    storyId: data.storyId,\n    aestheticStyle: data.aestheticStyle,\n    targetAge: data.targetAge,\n    styleBible: data.styleBible,\n    characterReferences: data.characterReferences,\n    environmentReferences: data.environmentReferences,\n    totalPages: pages.length,\n    intensity: data.intensity,\n    allData: data\n  }\n}));"
       },
-      "id": "prep-page-loop",
+      "id": "2596cf4f-45b4-4433-a847-55d7d8650edd",
       "name": "Prep Page Illustrations",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [5060, 300]
+      "position": [
+        5060,
+        300
+      ]
     },
     {
       "parameters": {
         "batchSize": 1,
         "options": {}
       },
-      "id": "page-loop",
+      "id": "6862034f-8250-4a1b-8e26-27c48364ac9a",
       "name": "9. Page Illustrator Loop",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [5280, 300],
+      "position": [
+        5280,
+        300
+      ],
       "notes": "ADJUSTABLE: Change batchSize to process pages in parallel (costs more, faster)."
     },
     {
       "parameters": {
         "jsCode": "// Build comprehensive page illustration prompt\nconst data = $input.first().json;\nconst page = data.page;\nconst pageIndex = data.pageIndex ?? 0;\n\n// Defensive check - ensure page exists\nif (!page) {\n  throw new Error(`Page data is undefined for pageIndex ${pageIndex}. Data keys: ${Object.keys(data).join(', ')}`);\n}\n\n// Camera angle - use scene's angle or rotate through defaults\nconst defaultAngle = pageIndex % 3 === 0 ? 'wide shot' : \n                     pageIndex % 2 === 0 ? 'medium shot' : 'close-up';\nconst cameraAngle = page.cameraAngle || defaultAngle;\n\nconst cameraDescriptions = {\n  'wide shot': 'Wide establishing shot showing full scene and environment',\n  'medium shot': 'Medium shot framing characters from waist up',\n  'close-up': 'Close-up focusing on facial expressions and emotional details'\n};\n\n// Build character reference section\nconst charRefs = (data.characterReferences || [])\n  .filter(c => c.referenceImage)\n  .map(c => `- ${c.name}${c.isHero ? ' (HERO)' : ''}: MATCH REFERENCE - ${c.keyFeatures?.join(', ') || c.description?.substring(0, 100)}`)\n  .join('\\n');\n\n// Build environment reference section\nconst envRef = (data.environmentReferences || [])\n  .find(e => page.environment && e.name.toLowerCase().includes(page.environment.toLowerCase()));\nconst envRefText = envRef ? `\\nENVIRONMENT REFERENCE: Match the visual style of \"${envRef.name}\" reference image.` : '';\n\nconst prompt = `SCENE: ${page.moment || page.caption}\n\nCAPTION: \"${page.caption}\"\n\nCOMPOSITION:\n- Camera: ${cameraDescriptions[cameraAngle] || cameraDescriptions['medium shot']}\n- Layout: FULL-PAGE illustration filling entire canvas\n- Use rule of thirds, create depth with foreground/midground/background\n\nINTENSITY: ${data.intensity}/10\n${data.intensity >= 7 ? '- DRAMATIC and emotionally intense' : data.intensity >= 4 ? '- Moderately engaging' : '- Gentle and calm'}\n\nCHARACTER CONSISTENCY (CRITICAL):\n${charRefs || 'No specific references'}\n\nLOCATION: ${page.environment || 'As described'}${envRefText}\n\nSTYLE:\n- Art: ${data.styleBible?.artStyle || data.aestheticStyle}\n- Colors: ${data.styleBible?.colorPalette || 'child-friendly'}\n- Lighting: ${data.styleBible?.lighting || 'natural'}\n- Density: ${data.styleBible?.visualDensity || 'age-appropriate'}\n\nTECHNICAL:\n- Full-page, no text in image\n- High resolution, publication-ready\n- Safe for ages 3-12\n\nGenerate illustration for page ${pageIndex + 1}.`;\n\nreturn [{\n  json: {\n    ...data,\n    illustrationPrompt: prompt\n  }\n}];"
       },
-      "id": "build-page-prompt",
+      "id": "3d75e9c1-b688-4bf5-bf75-f93c2290e842",
       "name": "Build Page Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [5500, 300],
+      "position": [
+        5500,
+        300
+      ],
       "notes": "ADJUSTABLE: Edit camera angle logic, intensity mappings, or composition rules. Now includes environment references."
     },
     {
@@ -462,11 +546,14 @@
           "timeout": 120000
         }
       },
-      "id": "generate-page-image",
+      "id": "623e8289-cb03-45d2-a451-ee260361e28c",
       "name": "Generate Page Image",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [5720, 300],
+      "position": [
+        5720,
+        300
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -480,11 +567,14 @@
       "parameters": {
         "jsCode": "// MEMORY FIX: Parse, Save to Supabase, and STRIP base64 before returning to loop\n// This prevents base64 accumulation in SplitInBatches node\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet imageData = null;\n\n// Extract image from Gemini response\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        imageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (imageData) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nconst storyId = data.storyId;\nconst pageNumber = (data.pageIndex || 0) + 1;\nconst caption = data.page?.caption || '';\nconst moment = data.page?.moment || '';\nconst environment = data.page?.environment || '';\nconst cameraAngle = data.page?.cameraAngle || '';\nconst prompt = data.illustrationPrompt || '';\n\n// Save to Supabase immediately\nlet savedOk = false;\nif (imageData) {\n  try {\n    const supabaseUrl = 'https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/pages';\n    const response = await fetch(supabaseUrl, {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': $credentials.httpHeaderAuth.value,\n        'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify({\n        story_id: storyId,\n        page_number: pageNumber,\n        caption: caption,\n        prompt: prompt,\n        image_url: imageData,\n        status: 'completed'\n      })\n    });\n    savedOk = response.ok;\n    if (!response.ok) {\n      console.error('Supabase save failed:', response.status);\n    }\n  } catch (e) {\n    console.error('Supabase save error:', e.message);\n  }\n}\n\n// CRITICAL: Return ONLY metadata - NO base64!\nreturn [{\n  json: {\n    pageNumber,\n    caption,\n    moment,\n    environment,\n    cameraAngle,\n    savedToSupabase: savedOk,\n    hasImage: !!imageData,\n    storyId\n  }\n}];"
       },
-      "id": "parse-save-strip-page",
+      "id": "15d53acd-a9c9-42c5-a5f9-a9b5e066c98f",
       "name": "Parse + Save + Strip Page",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [5820, 300],
+      "position": [
+        5820,
+        300
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "anXAvdazFeZf1z1L",
@@ -498,22 +588,28 @@
         "unit": "seconds",
         "amount": 4
       },
-      "id": "wait-between-pages",
+      "id": "e76f1edd-7a4d-46a4-83f5-f62b5c2c915c",
       "name": "Page Rate Limit",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [6240, 300],
+      "position": [
+        6240,
+        300
+      ],
       "notes": "ADJUSTABLE: Increase if hitting Gemini rate limits on image generation."
     },
     {
       "parameters": {
         "jsCode": "// Aggregate page metadata - images already saved to Supabase\nconst items = $input.all();\n\nconst allData = $('Prep Page Illustrations').first()?.json?.allData || $('Aggregate Environment References').first().json;\n\n// Items now contain clean metadata (no base64) from Parse + Save + Strip nodes\nconst generatedPages = items.map((item) => {\n  return {\n    pageNumber: item.json.pageNumber,\n    caption: item.json.caption,\n    moment: item.json.moment,\n    environment: item.json.environment,\n    cameraAngle: item.json.cameraAngle,\n    imageData: item.json.savedToSupabase ? '[SAVED_TO_SUPABASE]' : null,\n    savedToSupabase: item.json.savedToSupabase || false\n  };\n});\n\n// No storyText forward - keeping it slim\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    targetAge: allData.targetAge,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    analysis: allData.analysis,\n    styleBible: allData.styleBible,\n    characterReferences: allData.characterReferences,\n    environmentReferences: allData.environmentReferences,\n    storyArcSummary: allData.storyArcSummary,\n    heroImage: allData.heroImage,\n    generatedPages: generatedPages\n  }\n}];"
       },
-      "id": "aggregate-pages",
+      "id": "9495dd20-7419-4694-bad2-ee8f73b4a569",
       "name": "Aggregate Pages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [6260, 300],
+      "position": [
+        6260,
+        300
+      ],
       "notes": "Aggregates page metadata - base64 images already saved to Supabase"
     },
     {
@@ -529,11 +625,14 @@
           "timeout": 60000
         }
       },
-      "id": "consistency-reviewer",
+      "id": "38827b5e-bf70-4758-bccb-29a9647e88c5",
       "name": "10. Consistency Reviewer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [6380, 300],
+      "position": [
+        6380,
+        300
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -547,11 +646,14 @@
       "parameters": {
         "jsCode": "function parseAIResponse(responseText, fallback = {}) {\n  try {\n    let text = responseText;\n    if (typeof responseText === 'object') {\n      text = responseText?.candidates?.[0]?.content?.parts?.[0]?.text || \n             responseText?.text || \n             JSON.stringify(responseText);\n    }\n    const jsonMatch = text.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) return JSON.parse(jsonMatch[0]);\n  } catch (e) { console.error('Parse error:', e.message); }\n  return fallback;\n}\n\nconst responseBody = $input.first().json.body || $input.first().json;\nconst reviewData = parseAIResponse(responseBody, { \n  issues: [], \n  pagesNeedingRegeneration: [], \n  overallConsistency: 'good' \n});\n\nconst prevData = $('Aggregate Pages').first().json;\n\nreturn [{\n  json: {\n    ...prevData,\n    consistencyReview: reviewData,\n    needsFixing: (reviewData.pagesNeedingRegeneration || []).length > 0\n  }\n}];"
       },
-      "id": "parse-consistency",
+      "id": "685d826e-bca6-4116-ac16-954a683e4a80",
       "name": "Parse Consistency Review",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [6600, 300]
+      "position": [
+        6600,
+        300
+      ]
     },
     {
       "parameters": {
@@ -576,21 +678,27 @@
         },
         "options": {}
       },
-      "id": "check-needs-fixing",
+      "id": "77d03ce4-e255-4d2d-92dc-e27d7291f72f",
       "name": "Needs Fixing?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [6820, 300]
+      "position": [
+        6820,
+        300
+      ]
     },
     {
       "parameters": {
         "jsCode": "// Prepare pages needing fixes\nconst data = $input.first().json;\nconst pagesToFix = data.consistencyReview?.pagesNeedingRegeneration || [];\nconst issues = data.consistencyReview?.issues || [];\n\nif (pagesToFix.length === 0) {\n  return [{ json: data }];\n}\n\nreturn pagesToFix.slice(0, 3).map(pageNum => {\n  const issue = issues.find(i => i.pageNumber === pageNum);\n  const page = data.generatedPages?.find(p => p.pageNumber === pageNum);\n  \n  return {\n    json: {\n      pageNumber: pageNum,\n      page: page,\n      fixPrompt: issue?.fixPrompt || 'Ensure visual consistency with character and environment references',\n      issue: issue,\n      storyId: data.storyId,\n      aestheticStyle: data.aestheticStyle,\n      styleBible: data.styleBible,\n      characterReferences: data.characterReferences,\n      environmentReferences: data.environmentReferences,\n      allData: data\n    }\n  };\n});"
       },
-      "id": "prep-fix-loop",
+      "id": "bf3e8124-789d-4ee5-b6d8-6145005002fd",
       "name": "Prep Fix Loop",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [7040, 200],
+      "position": [
+        7040,
+        200
+      ],
       "notes": "Limits fixes to max 3 pages per run to prevent infinite loops"
     },
     {
@@ -598,22 +706,28 @@
         "batchSize": 1,
         "options": {}
       },
-      "id": "fix-loop",
+      "id": "fb6f6700-9ea7-48fe-bd49-8034c91ea69a",
       "name": "11. Consistency Fixer Loop",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [7260, 200],
+      "position": [
+        7260,
+        200
+      ],
       "notes": "Only runs if consistency issues found."
     },
     {
       "parameters": {
         "jsCode": "// Build fix prompt with specific instructions\nconst data = $input.first().json;\n\nconst charRefs = (data.characterReferences || [])\n  .filter(c => c.referenceImage)\n  .map(c => `- ${c.name}${c.isHero ? ' (HERO - CRITICAL)' : ''}: MATCH EXACTLY - ${c.keyFeatures?.join(', ') || 'as referenced'}`)\n  .join('\\n');\n\n// Find matching environment reference\nconst envRef = (data.environmentReferences || [])\n  .find(e => data.page?.environment && e.name.toLowerCase().includes(data.page.environment.toLowerCase()));\nconst envRefText = envRef ? `\\nENVIRONMENT: Match \"${envRef.name}\" reference exactly.` : '';\n\nconst prompt = `CONSISTENCY FIX - PAGE ${data.pageNumber}\n\nFIX REQUIRED: ${data.fixPrompt}\nISSUE: ${data.issue?.description || 'visual consistency'}\n\nCAPTION: \"${data.page?.caption || ''}\"\n\nCHARACTER CONSISTENCY (CRITICAL):\n${charRefs}\n- Match hair color, facial features, clothing from Page 1\n${envRefText}\n\nSTYLE: ${data.styleBible?.artStyle || data.aestheticStyle}\n- Match exact same style as other pages\n\nTECHNICAL: Full-page, no text, match existing pages exactly.\nSafe for ages 3-12.\n\nRegenerate page ${data.pageNumber} with fixes.`;\n\nreturn [{\n  json: {\n    ...data,\n    fixIllustrationPrompt: prompt\n  }\n}];"
       },
-      "id": "build-fix-prompt",
+      "id": "317136bf-e5a0-4e55-a66f-f683c6805011",
       "name": "Build Fix Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [7480, 200],
+      "position": [
+        7480,
+        200
+      ],
       "notes": "ADJUSTABLE: Edit fix instructions. Now includes environment reference matching."
     },
     {
@@ -629,11 +743,14 @@
           "timeout": 120000
         }
       },
-      "id": "regenerate-page",
+      "id": "255ca1db-64b4-4f58-86a0-cb7f8241a280",
       "name": "Regenerate Page",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [7700, 200],
+      "position": [
+        7700,
+        200
+      ],
       "credentials": {
         "httpQueryAuth": {
           "id": "",
@@ -648,31 +765,40 @@
         "unit": "seconds",
         "amount": 4
       },
-      "id": "wait-between-fixes",
+      "id": "b776d835-da51-47da-aa6f-1e1fe3104598",
       "name": "Fix Rate Limit",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [7920, 200]
+      "position": [
+        7920,
+        200
+      ]
     },
     {
       "parameters": {
         "jsCode": "// Merge fixed pages back into the full page list - MEMORY OPTIMIZED\nconst fixedItems = $input.all();\nconst allData = fixedItems[0]?.json?.allData || $('Parse Consistency Review').first().json;\nconst saveToSupabase = allData.saveToSupabase || false;\n\nconst fixedPagesMap = new Map();\nfixedItems.forEach(item => {\n  if (item.json.pageNumber) {\n    const responseBody = item.json.body || item.json;\n    let imageData = null;\n    \n    try {\n      const candidates = responseBody?.candidates || [];\n      for (const candidate of candidates) {\n        const parts = candidate?.content?.parts || [];\n        for (const part of parts) {\n          if (part.inlineData) {\n            imageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n            break;\n          }\n        }\n        if (imageData) break;\n      }\n    } catch (e) {\n      console.error('Error extracting image:', e.message);\n    }\n    \n    if (imageData) {\n      // MEMORY OPTIMIZATION: Apply same logic as page aggregation\n      const finalImageData = saveToSupabase ? '[FIXED_AND_SAVED]' : imageData;\n      fixedPagesMap.set(item.json.pageNumber, finalImageData);\n    }\n  }\n});\n\nconst finalPages = (allData.generatedPages || []).map(page => {\n  if (fixedPagesMap.has(page.pageNumber)) {\n    return {\n      ...page,\n      imageData: fixedPagesMap.get(page.pageNumber),\n      wasFixed: true\n    };\n  }\n  return page;\n});\n\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    targetAge: allData.targetAge,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    analysis: allData.analysis,\n    styleBible: allData.styleBible,\n    characterReferences: allData.characterReferences,\n    environmentReferences: allData.environmentReferences,\n    storyArcSummary: allData.storyArcSummary,\n    heroImage: allData.heroImage,\n    generatedPages: finalPages,\n    fixedPageCount: fixedPagesMap.size,\n    consistencyReview: allData.consistencyReview\n  }\n}];"
       },
-      "id": "merge-fixed-pages",
+      "id": "eb70fce2-45ac-4ed0-b26c-578575b1c816",
       "name": "Merge Fixed Pages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [8140, 200]
+      "position": [
+        8140,
+        200
+      ]
     },
     {
       "parameters": {
         "jsCode": "// Final response assembly - MEMORY OPTIMIZED\nconst data = $input.first().json;\n\nconst response = {\n  success: true,\n  storyId: data.storyId,\n  title: data.analysis?.title || 'Untitled Story',\n  theme: data.analysis?.theme || '',\n  storyArcSummary: data.storyArcSummary || [],\n  \n  // For pages: if saved to Supabase, imageData will be placeholder\n  // Frontend should fetch from Supabase by storyId\n  pages: (data.generatedPages || []).map(page => ({\n    pageNumber: page.pageNumber,\n    caption: page.caption,\n    environment: page.environment,\n    imageData: page.imageData,\n    wasFixed: page.wasFixed || false,\n    savedToSupabase: page.hasSavedImage || page.imageData === '[SAVED_TO_SUPABASE]' || page.imageData === '[FIXED_AND_SAVED]'\n  })),\n  \n  characters: (data.characterReferences || []).map(char => ({\n    name: char.name,\n    role: char.role,\n    isHero: char.isHero || false,\n    description: char.description,\n    referenceImage: char.referenceImage,\n    savedToSupabase: char.hasSavedImage || char.referenceImage === '[SAVED_TO_SUPABASE]'\n  })),\n  \n  environments: (data.environmentReferences || []).map(env => ({\n    name: env.name,\n    referenceImage: env.referenceImage,\n    savedToSupabase: env.hasSavedImage || env.referenceImage === '[SAVED_TO_SUPABASE]'\n  })),\n  \n  styleBible: data.styleBible,\n  \n  metadata: {\n    pageCount: data.generatedPages?.length || 0,\n    characterCount: data.characterReferences?.length || 0,\n    environmentCount: data.environmentReferences?.length || 0,\n    consistencyIssuesFound: data.consistencyReview?.issues?.length || 0,\n    pagesFixed: data.fixedPageCount || 0,\n    targetAge: data.targetAge,\n    intensity: data.intensity,\n    aestheticStyle: data.aestheticStyle,\n    heroImageUsed: !!data.heroImage,\n    savedToSupabase: data.saveToSupabase || false\n  }\n};\n\nreturn [{ json: response }];"
       },
-      "id": "final-aggregation",
+      "id": "66df01fb-3bb1-4e76-a8c6-b6ce13cf9bbb",
       "name": "12. Build Final Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [8360, 300]
+      "position": [
+        8360,
+        300
+      ]
     },
     {
       "parameters": {
@@ -680,11 +806,14 @@
         "responseBody": "={{ $json }}",
         "options": {}
       },
-      "id": "webhook-response",
+      "id": "8603ce64-aa94-411a-ad11-7ac1622073cf",
       "name": "13. Webhook Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [8580, 300]
+      "position": [
+        8580,
+        300
+      ]
     }
   ],
   "connections": {

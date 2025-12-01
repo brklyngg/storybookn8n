@@ -94,11 +94,14 @@ function StudioContent() {
         }
       }, 8000); // Update every 8 seconds
 
-      // Call n8n webhook
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      // Call Supabase Edge Function (which saves story and calls n8n)
+      const SUPABASE_FUNCTION_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/story-intake`;
+      
+      const response = await fetch(SUPABASE_FUNCTION_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({
           storyId: data.storyId,
