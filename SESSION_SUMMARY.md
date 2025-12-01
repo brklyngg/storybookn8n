@@ -2,6 +2,66 @@
 
 ---
 
+## Session 8 - November 30, 2025 (Night)
+
+### Overview
+Quick bug fix session to resolve "Cannot read properties of undefined (reading 'storyText')" error that was causing immediate workflow failure on webhook invocation.
+
+### Work Completed
+
+#### 1. Root Cause Analysis
+**Error:** `Cannot read properties of undefined (reading 'storyText') [line 4]` in "Extract & Validate Inputs" node
+
+**Investigation:**
+- Webhook node had `rawBody: true` configured (line 10 of workflow JSON)
+- When `rawBody: true`, n8n receives the JSON body as a raw STRING instead of parsing it
+- The code `const body = input.body || input;` was getting a string like `'{"storyText":"..."}'`
+- Accessing `body.storyText` on a string returns `undefined`
+
+**Frontend Error:** "Failed to fetch" was a secondary symptom - the n8n workflow crashed before it could respond.
+
+#### 2. Fix Implementation
+**File:** `workflows/storybook-generator.json`
+
+**Before (lines 9-11):**
+```json
+"options": {
+  "rawBody": true
+}
+```
+
+**After:**
+```json
+"options": {}
+```
+
+**Impact:** n8n now automatically parses incoming JSON, making `$input.first().json` contain the parsed object with `storyText`, `settings`, etc.
+
+### Files Modified
+- `/workflows/storybook-generator.json` (removed rawBody: true)
+
+### Technical Insights
+
+**n8n Webhook rawBody Behavior:**
+- `rawBody: false` (default): n8n parses JSON automatically, data available as parsed object
+- `rawBody: true`: n8n keeps body as raw string, useful for XML/binary/custom formats
+- For standard JSON APIs (like this frontend), rawBody should be false
+
+**Why This Wasn't Caught Earlier:**
+- The webhook might have worked in earlier testing with different data structures
+- Session 6 fixed the data path (`input.body || input`) but didn't notice rawBody was enabled
+- Error message pointed to "storyText" being undefined, not that the whole body was a string
+
+### Session Duration
+Approximately 15 minutes
+
+### Next Steps
+1. Re-import `workflows/storybook-generator.json` into n8n Cloud
+2. Re-assign credentials (Gemini Query Auth, Supabase Header Auth)
+3. Test complete workflow with sample story
+
+---
+
 ## Session 7 - November 30, 2025 (Evening)
 
 ### Overview

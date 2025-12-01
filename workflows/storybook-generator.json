@@ -6,9 +6,7 @@
         "httpMethod": "POST",
         "path": "generate-storybook",
         "responseMode": "responseNode",
-        "options": {
-          "rawBody": true
-        }
+        "options": {}
       },
       "id": "webhook-input",
       "name": "1. Webhook Input",
