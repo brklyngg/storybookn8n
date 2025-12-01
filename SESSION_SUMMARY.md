@@ -2,6 +2,97 @@
 
 ---
 
+## Session 9 - December 1, 2025 (Early Morning)
+
+### Overview
+Critical bug fix session to resolve "pages" data being lost after Supabase save, causing "Page data is undefined for pageIndex 0" error in the Build Page Prompt node.
+
+### Work Completed
+
+#### 1. Root Cause Analysis
+**Error:** `Page data is undefined for pageIndex 0. Data keys: characterReferences, environmentReferences, generatedPages, error` in "Build Page Prompt" node
+
+**Investigation:**
+- Workflow was successfully saving story to Supabase (status "generating", step "characters")
+- But no characters or pages were being saved - workflow crashed during character portrait generation
+- Traced data flow through the pipeline and discovered data loss at "Continue Pipeline" node
+
+**Root Cause:**
+The "7. Save to Supabase" HTTP Request node:
+1. Sends story data TO Supabase
+2. Returns the Supabase API response (empty/minimal), NOT the original input data
+
+Data flow breakdown:
+```
+"6. Parse Characters & Create Style Bible" (has pages ✓)
+    ↓
+"Save to Supabase?" (IF node - passes data unchanged ✓)
+    ↓ true branch
+"7. Save to Supabase" (HTTP Request)
+    ↓ OUTPUT: {} ← DATA LOST!
+"Continue Pipeline" (receives {})
+    ↓
+All downstream nodes: pages=undefined
+```
+
+#### 2. Legacy App Comparison
+Examined the original Next.js app (brklyngg/storybook-generator) for insights:
+- Legacy app uses **client-side orchestration** - React state holds all data
+- Each API call receives everything it needs in the request body
+- Data never flows through backend - client passes it fresh each time
+
+**Key Learning:** In n8n server-side orchestration, HTTP nodes don't pass through input data. Must explicitly reference nodes that have the data needed.
+
+#### 3. Fix Implementation
+**File:** `workflows/storybook-generator.json`
+
+**Before (Continue Pipeline node):**
+```javascript
+// Pass through data unchanged - this node exists to merge branches
+return $input.all();
+```
+
+**After:**
+```javascript
+// Merge branches - get original data from IF node, not from Supabase HTTP response
+// The HTTP Request node returns API response, not original data
+const ifNodeData = $('Save to Supabase?').first().json;
+return [{ json: ifNodeData }];
+```
+
+**Impact:** The "Continue Pipeline" node now explicitly references the IF node (which still has all the data) instead of using the empty Supabase HTTP response.
+
+### Files Modified
+- `/workflows/storybook-generator.json` (Continue Pipeline node code)
+
+### Technical Insights
+
+**n8n HTTP Request Node Behavior:**
+- HTTP Request nodes return ONLY the API response
+- Original input data is NOT passed through
+- Must use `$('NodeName')` to reference earlier nodes that have needed data
+
+**n8n vs Next.js Architecture:**
+| Aspect | Next.js (Legacy) | n8n Workflow |
+|--------|------------------|--------------|
+| Data Storage | Client-side React state | Must flow node-to-node |
+| API Calls | Stateless, receive all needed data | Depend on previous node outputs |
+| Data Loss Risk | Low - client always has data | High - HTTP nodes drop input |
+
+**Pattern for n8n Supabase Integration:**
+When saving to Supabase mid-workflow, don't rely on the HTTP response for downstream data. Instead, reference the node BEFORE the HTTP save to get the original data.
+
+### Session Duration
+Approximately 45 minutes (debugging + legacy app analysis + fix)
+
+### Next Steps
+1. Re-import `workflows/storybook-generator.json` into n8n Cloud
+2. Re-assign credentials (Gemini Query Auth, Supabase Header Auth)
+3. Test complete workflow with sample story
+4. Verify pages array flows through to Build Page Prompt
+
+---
+
 ## Session 8 - November 30, 2025 (Night)
 
 ### Overview

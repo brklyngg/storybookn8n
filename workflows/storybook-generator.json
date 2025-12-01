@@ -246,7 +246,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Pass through data unchanged - this node exists to merge branches\nreturn $input.all();"
+        "jsCode": "// Merge branches - get original data from IF node, not from Supabase HTTP response\n// The HTTP Request node returns API response, not original data\nconst ifNodeData = $('Save to Supabase?').first().json;\nreturn [{ json: ifNodeData }];"
       },
       "id": "merge-supabase",
       "name": "Continue Pipeline",
