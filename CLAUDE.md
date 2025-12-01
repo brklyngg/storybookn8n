@@ -62,23 +62,45 @@ AI-powered children's picture book generator using **n8n Cloud workflows** as th
 
 ## Memory Optimization (Critical)
 
-The workflow includes **memory optimization** to prevent crashes on n8n Cloud. Without this, base64 images accumulate in memory during loops and exceed n8n's execution limits (~256-512MB).
+The workflow prevents crashes on n8n Cloud by **stripping base64 BEFORE data returns to loops**, not after. n8n's `SplitInBatches` node accumulates ALL loop outputs in memory before firing "done", so base64 images must be removed immediately after saving.
 
-### How It Works
+### The Problem (Fixed)
 
-1. **`saveToSupabase` is always `true`** - Images are saved to database immediately
-2. **Base64 stripping** - After saving, aggregation nodes replace base64 with `[SAVED_TO_SUPABASE]` placeholder
-3. **Explicit field selection** - Aggregation nodes only carry forward necessary fields, not entire `allData` objects
+n8n's `SplitInBatches` behavior:
+- Collects ALL loop iteration outputs in memory
+- Combines them when firing "done" output
+- With 10 pages × 1-2MB base64 = 10-20MB accumulated → OOM crash
 
-### Affected Nodes
+### How It Works Now
 
-| Node | Memory Optimization |
-|------|---------------------|
-| Aggregate Character Portraits | Strips base64, adds `savedToSupabase` flag |
-| Aggregate Environment References | Strips base64, adds `savedToSupabase` flag |
-| Aggregate Pages | Strips base64, adds `savedToSupabase` flag |
-| Merge Fixed Pages | Strips base64 for fixed pages |
-| Build Final Response | Includes `savedToSupabase` flags for frontend |
+1. **Parse + Save + Strip Pattern** - Single Code nodes that:
+   - Extract base64 from Gemini response
+   - Save to Supabase immediately using `fetch()`
+   - Return ONLY metadata (name, pageNumber, savedToSupabase) - **NO base64**
+   - The stripped metadata flows back to the loop
+
+2. **Loop accumulates tiny metadata** instead of huge base64 images
+3. **Aggregation nodes** receive clean metadata, not Gemini responses
+
+### Key Nodes (Memory-Safe)
+
+| Node | What It Does |
+|------|--------------|
+| Parse + Save + Strip Character | Saves portrait to Supabase, returns metadata only |
+| Parse + Save + Strip Environment | Saves environment ref to Supabase, returns metadata only |
+| Parse + Save + Strip Page | Saves page image to Supabase, returns metadata only |
+
+### Why This Works
+
+```
+BEFORE (crashed):
+Generate Image → Parse → IF → HTTP Save → Rate Limit → Loop
+                  ↑ base64 stays in loop accumulation
+
+AFTER (fixed):
+Generate Image → Parse+Save+Strip → Rate Limit → Loop
+                  ↑ base64 removed, only metadata returns
+```
 
 ### Frontend Requirement
 

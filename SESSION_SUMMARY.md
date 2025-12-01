@@ -2,6 +2,71 @@
 
 ---
 
+## Session 11 - December 1, 2025
+
+### Overview
+Critical memory optimization fix to prevent n8n Cloud OOM crashes. Root cause analysis revealed n8n's `SplitInBatches` node accumulates ALL loop outputs in memory before firing "done" - base64 images were being stripped TOO LATE (at aggregation), not BEFORE returning to loop.
+
+### The Problem
+
+**Root Cause:** n8n's `SplitInBatches` behavior:
+- Collects ALL loop iteration outputs in memory
+- Combines them when firing "done" output
+- With 10 pages × 1-2MB base64 = 10-20MB accumulated → OOM crash
+
+**Critical Bug Found:** Environment reference loop had NO save to Supabase step at all! Every full Gemini response (with base64) was flowing back and accumulating.
+
+**Crash Point:** "Aggregate Environment References" node (after ~6.5 min, 3-4 images generated)
+
+### The Fix
+
+**Parse + Save + Strip Pattern** - Replaced separate Parse → IF → HTTP Save nodes with unified Code nodes that:
+1. Extract base64 from Gemini response
+2. Save to Supabase immediately using `fetch()`
+3. Return ONLY metadata (no base64) back to loop
+
+```
+BEFORE (crashed):
+Generate Image → Parse → IF → HTTP Save → Rate Limit → Loop
+                  ↑ base64 stays in loop accumulation
+
+AFTER (fixed):
+Generate Image → Parse+Save+Strip → Rate Limit → Loop
+                  ↑ base64 removed, only metadata returns
+```
+
+### Changes Made
+
+**New Nodes:**
+- `Parse + Save + Strip Character` - Replaces Parse/IF/Save character nodes
+- `Parse + Save + Strip Environment` - NEW! Was completely missing before
+- `Parse + Save + Strip Page` - Replaces Parse/IF/Save page nodes
+
+**Updated Aggregation Nodes:**
+- Now receive clean metadata, not Gemini responses
+- No more base64 extraction attempts (already saved)
+
+**Updated Connections:**
+- Simplified flow: Generate → Parse+Save+Strip → Rate Limit → Loop
+
+### Files Modified
+- `workflows/storybook-generator.json` (major restructure of all 3 loops)
+- `CLAUDE.md` (updated memory optimization section)
+
+### Key Insight
+The alternative brklyngg/storybook-generator project works because it processes images one at a time through individual API calls, never accumulating multiple images in memory. n8n's batch architecture required explicit memory management.
+
+### Next Steps
+1. Re-import workflow to n8n Cloud
+2. Re-assign credentials (Gemini Query Auth, Supabase Header Auth)
+3. Test with 5-page story
+4. Monitor n8n execution logs for memory usage
+
+### Session Duration
+~45 minutes
+
+---
+
 ## Session 10 - November 30, 2025 (Late Night)
 
 ### Overview

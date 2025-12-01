@@ -307,77 +307,20 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract image from Gemini response and prepare for Supabase save\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet referenceImage = null;\n\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        referenceImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (referenceImage) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nreturn [{\n  json: {\n    ...data,\n    referenceImage,\n    // Data for Supabase save\n    storyId: data.storyId,\n    characterName: data.character?.name,\n    characterDescription: data.character?.description,\n    characterRole: data.character?.role,\n    isHero: data.character?.isHero || false,\n    saveToSupabase: data.allData?.saveToSupabase || false\n  }\n}];"
+        "jsCode": "// MEMORY FIX: Parse, Save to Supabase, and STRIP base64 before returning to loop\n// This prevents base64 accumulation in SplitInBatches node\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet referenceImage = null;\n\n// Extract image from Gemini response\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        referenceImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (referenceImage) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nconst storyId = data.storyId;\nconst characterName = data.character?.name || '';\nconst characterDescription = data.character?.description || '';\nconst characterRole = data.character?.role || 'supporting';\nconst isHero = data.character?.isHero || false;\nconst keyFeatures = data.character?.keyFeatures || [];\n\n// Save to Supabase immediately (saveToSupabase is always true)\nlet savedOk = false;\nif (referenceImage) {\n  try {\n    const supabaseUrl = 'https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/characters';\n    const response = await fetch(supabaseUrl, {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': $credentials.httpHeaderAuth.value,\n        'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify({\n        story_id: storyId,\n        name: characterName,\n        description: characterDescription,\n        role: characterRole,\n        is_hero: isHero,\n        reference_image: referenceImage,\n        status: 'completed'\n      })\n    });\n    savedOk = response.ok;\n    if (!response.ok) {\n      console.error('Supabase save failed:', response.status);\n    }\n  } catch (e) {\n    console.error('Supabase save error:', e.message);\n  }\n}\n\n// CRITICAL: Return ONLY metadata - NO base64!\n// This prevents memory accumulation in the loop\nreturn [{\n  json: {\n    // Minimal metadata for aggregation\n    characterName,\n    characterRole,\n    characterDescription,\n    isHero,\n    keyFeatures,\n    savedToSupabase: savedOk,\n    hasImage: !!referenceImage,\n    // Keep storyId for reference\n    storyId\n  }\n}];"
       },
-      "id": "parse-portrait-result",
-      "name": "Parse Portrait Result",
+      "id": "parse-save-strip-character",
+      "name": "Parse + Save + Strip Character",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3380, 300]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "save-char-check",
-              "leftValue": "={{ $json.saveToSupabase }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "check-save-character",
-      "name": "Save Character?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [3520, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/characters",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Prefer",
-              "value": "return=minimal"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"story_id\": {{ JSON.stringify($json.storyId) }},\n  \"name\": {{ JSON.stringify($json.characterName || '') }},\n  \"description\": {{ JSON.stringify($json.characterDescription || '') }},\n  \"role\": {{ JSON.stringify($json.characterRole || 'supporting') }},\n  \"is_hero\": {{ $json.isHero || false }},\n  \"reference_image\": {{ JSON.stringify($json.referenceImage || '') }},\n  \"status\": \"completed\"\n}",
-        "options": {
-          "timeout": 30000
-        }
-      },
-      "id": "save-character-supabase",
-      "name": "Save Character to DB",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [3660, 200],
+      "position": [3380, 300],
       "credentials": {
         "httpHeaderAuth": {
           "id": "",
           "name": "Supabase Service Key"
         }
       },
-      "onError": "continueErrorOutput"
+      "notes": "MEMORY FIX: Saves to Supabase immediately and returns ONLY metadata (no base64) to prevent memory accumulation in loop"
     },
     {
       "parameters": {
@@ -393,13 +336,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Aggregate all character portraits - MEMORY OPTIMIZED\nconst items = $input.all();\nconst firstItem = items[0]?.json || {};\n\nlet allData;\nif (firstItem.skipPortraitGeneration) {\n  allData = firstItem;\n} else {\n  allData = $('Continue Pipeline').first().json;\n}\n\nconst saveToSupabase = allData.saveToSupabase || false;\n\nconst characterRefs = items.map(item => {\n  if (item.json.skipPortraitGeneration) return null;\n  \n  const responseBody = item.json.body || item.json;\n  let imageData = null;\n  \n  try {\n    const candidates = responseBody?.candidates || [];\n    for (const candidate of candidates) {\n      const parts = candidate?.content?.parts || [];\n      for (const part of parts) {\n        if (part.inlineData) {\n          imageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n          break;\n        }\n      }\n      if (imageData) break;\n    }\n  } catch (e) {\n    console.error('Error extracting image:', e.message);\n  }\n  \n  // MEMORY OPTIMIZATION: If saved to Supabase, don't carry base64 forward\n  const referenceImage = saveToSupabase \n    ? (imageData ? '[SAVED_TO_SUPABASE]' : null)\n    : imageData;\n  \n  return {\n    name: item.json.character?.name,\n    role: item.json.character?.role,\n    isHero: item.json.character?.isHero || false,\n    description: item.json.character?.description,\n    keyFeatures: item.json.character?.keyFeatures,\n    referenceImage: referenceImage,\n    hasSavedImage: !!imageData && saveToSupabase\n  };\n}).filter(c => c && c.name);\n\n// Explicit field selection to avoid carrying unnecessary data\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    storyText: allData.storyText,\n    settings: allData.settings,\n    targetAge: allData.targetAge,\n    desiredPageCount: allData.desiredPageCount,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    heroImage: allData.heroImage,\n    analysis: allData.analysis,\n    pages: allData.pages,\n    characters: allData.characters,\n    environments: allData.environments,\n    styleBible: allData.styleBible,\n    characterReferences: characterRefs\n  }\n}];"
+        "jsCode": "// Aggregate character metadata - images already saved to Supabase\nconst items = $input.all();\nconst firstItem = items[0]?.json || {};\n\nlet allData;\nif (firstItem.skipPortraitGeneration) {\n  allData = firstItem;\n} else {\n  allData = $('Continue Pipeline').first().json;\n}\n\n// Items now contain clean metadata (no base64) from Parse + Save + Strip nodes\nconst characterRefs = items.map(item => {\n  if (item.json.skipPortraitGeneration) return null;\n  \n  return {\n    name: item.json.characterName,\n    role: item.json.characterRole,\n    isHero: item.json.isHero || false,\n    description: item.json.characterDescription,\n    keyFeatures: item.json.keyFeatures,\n    referenceImage: item.json.savedToSupabase ? '[SAVED_TO_SUPABASE]' : null,\n    savedToSupabase: item.json.savedToSupabase || false\n  };\n}).filter(c => c && c.name);\n\n// Explicit field selection - no storyText (large) after this point\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    storyText: allData.storyText,\n    settings: allData.settings,\n    targetAge: allData.targetAge,\n    desiredPageCount: allData.desiredPageCount,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    heroImage: allData.heroImage,\n    analysis: allData.analysis,\n    pages: allData.pages,\n    characters: allData.characters,\n    environments: allData.environments,\n    styleBible: allData.styleBible,\n    characterReferences: characterRefs\n  }\n}];"
       },
       "id": "aggregate-characters",
       "name": "Aggregate Character Portraits",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3740, 300]
+      "position": [3940, 300],
+      "notes": "Aggregates character metadata - base64 images already saved to Supabase"
     },
     {
       "parameters": {
@@ -453,6 +397,23 @@
     },
     {
       "parameters": {
+        "jsCode": "// MEMORY FIX: Parse, Save to Supabase, and STRIP base64 before returning to loop\n// This prevents base64 accumulation in SplitInBatches node\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet referenceImage = null;\n\n// Extract image from Gemini response\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        referenceImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (referenceImage) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nconst storyId = data.storyId;\nconst environmentName = data.environmentName || '';\n\n// Save to Supabase immediately\nlet savedOk = false;\nif (referenceImage) {\n  try {\n    const supabaseUrl = 'https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/environments';\n    const response = await fetch(supabaseUrl, {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': $credentials.httpHeaderAuth.value,\n        'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify({\n        story_id: storyId,\n        name: environmentName,\n        reference_image: referenceImage,\n        status: 'completed'\n      })\n    });\n    savedOk = response.ok;\n    if (!response.ok) {\n      console.error('Supabase save failed:', response.status);\n    }\n  } catch (e) {\n    console.error('Supabase save error:', e.message);\n  }\n}\n\n// CRITICAL: Return ONLY metadata - NO base64!\nreturn [{\n  json: {\n    environmentName,\n    savedToSupabase: savedOk,\n    hasImage: !!referenceImage,\n    storyId\n  }\n}];"
+      },
+      "id": "parse-save-strip-environment",
+      "name": "Parse + Save + Strip Environment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4520, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Supabase Service Key"
+        }
+      },
+      "notes": "MEMORY FIX: Saves to Supabase immediately and returns ONLY metadata (no base64) to prevent memory accumulation in loop"
+    },
+    {
+      "parameters": {
         "unit": "seconds",
         "amount": 3
       },
@@ -460,17 +421,18 @@
       "name": "Environment Rate Limit",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [4620, 300]
+      "position": [4720, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Aggregate all environment references - MEMORY OPTIMIZED\nconst items = $input.all();\nconst firstItem = items[0]?.json || {};\n\nlet allData;\nif (firstItem.skipEnvironmentGeneration) {\n  allData = firstItem;\n} else {\n  allData = $('Aggregate Character Portraits').first().json;\n}\n\nconst saveToSupabase = allData.saveToSupabase || false;\n\nconst environmentRefs = items.map(item => {\n  if (item.json.skipEnvironmentGeneration) return null;\n  \n  const responseBody = item.json.body || item.json;\n  let imageData = null;\n  \n  try {\n    const candidates = responseBody?.candidates || [];\n    for (const candidate of candidates) {\n      const parts = candidate?.content?.parts || [];\n      for (const part of parts) {\n        if (part.inlineData) {\n          imageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n          break;\n        }\n      }\n      if (imageData) break;\n    }\n  } catch (e) {\n    console.error('Error extracting image:', e.message);\n  }\n  \n  // MEMORY OPTIMIZATION: Strip base64 if saved to Supabase\n  const referenceImage = saveToSupabase \n    ? (imageData ? '[SAVED_TO_SUPABASE]' : null)\n    : imageData;\n  \n  return {\n    name: item.json.environmentName,\n    referenceImage: referenceImage,\n    hasSavedImage: !!imageData && saveToSupabase\n  };\n}).filter(e => e && e.name);\n\n// Explicit field selection to avoid carrying unnecessary data\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    storyText: allData.storyText,\n    settings: allData.settings,\n    targetAge: allData.targetAge,\n    desiredPageCount: allData.desiredPageCount,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    heroImage: allData.heroImage,\n    analysis: allData.analysis,\n    pages: allData.pages,\n    characters: allData.characters,\n    environments: allData.environments,\n    styleBible: allData.styleBible,\n    characterReferences: allData.characterReferences,\n    environmentReferences: environmentRefs\n  }\n}];"
+        "jsCode": "// Aggregate environment metadata - images already saved to Supabase\nconst items = $input.all();\nconst firstItem = items[0]?.json || {};\n\nlet allData;\nif (firstItem.skipEnvironmentGeneration) {\n  allData = firstItem;\n} else {\n  allData = $('Aggregate Character Portraits').first().json;\n}\n\n// Items now contain clean metadata (no base64) from Parse + Save + Strip nodes\nconst environmentRefs = items.map(item => {\n  if (item.json.skipEnvironmentGeneration) return null;\n  \n  return {\n    name: item.json.environmentName,\n    referenceImage: item.json.savedToSupabase ? '[SAVED_TO_SUPABASE]' : null,\n    savedToSupabase: item.json.savedToSupabase || false\n  };\n}).filter(e => e && e.name);\n\n// Explicit field selection\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    storyText: allData.storyText,\n    settings: allData.settings,\n    targetAge: allData.targetAge,\n    desiredPageCount: allData.desiredPageCount,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    heroImage: allData.heroImage,\n    analysis: allData.analysis,\n    pages: allData.pages,\n    characters: allData.characters,\n    environments: allData.environments,\n    styleBible: allData.styleBible,\n    characterReferences: allData.characterReferences,\n    environmentReferences: environmentRefs\n  }\n}];"
       },
       "id": "aggregate-environments",
       "name": "Aggregate Environment References",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [4840, 300]
+      "position": [4940, 300],
+      "notes": "Aggregates environment metadata - base64 images already saved to Supabase"
     },
     {
       "parameters": {
@@ -534,77 +496,20 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extract image from Gemini response and prepare for Supabase save\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet imageData = null;\n\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        imageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (imageData) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nreturn [{\n  json: {\n    ...data,\n    extractedImageData: imageData,\n    // Data for Supabase save\n    storyId: data.storyId,\n    pageNumber: data.pageIndex + 1,\n    caption: data.page?.caption,\n    prompt: data.illustrationPrompt,\n    saveToSupabase: data.allData?.saveToSupabase || false\n  }\n}];"
+        "jsCode": "// MEMORY FIX: Parse, Save to Supabase, and STRIP base64 before returning to loop\n// This prevents base64 accumulation in SplitInBatches node\nconst data = $input.first().json;\nconst responseBody = data.body || data;\nlet imageData = null;\n\n// Extract image from Gemini response\ntry {\n  const candidates = responseBody?.candidates || [];\n  for (const candidate of candidates) {\n    const parts = candidate?.content?.parts || [];\n    for (const part of parts) {\n      if (part.inlineData) {\n        imageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n        break;\n      }\n    }\n    if (imageData) break;\n  }\n} catch (e) {\n  console.error('Error extracting image:', e.message);\n}\n\nconst storyId = data.storyId;\nconst pageNumber = (data.pageIndex || 0) + 1;\nconst caption = data.page?.caption || '';\nconst moment = data.page?.moment || '';\nconst environment = data.page?.environment || '';\nconst cameraAngle = data.page?.cameraAngle || '';\nconst prompt = data.illustrationPrompt || '';\n\n// Save to Supabase immediately\nlet savedOk = false;\nif (imageData) {\n  try {\n    const supabaseUrl = 'https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/pages';\n    const response = await fetch(supabaseUrl, {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': $credentials.httpHeaderAuth.value,\n        'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify({\n        story_id: storyId,\n        page_number: pageNumber,\n        caption: caption,\n        prompt: prompt,\n        image_url: imageData,\n        status: 'completed'\n      })\n    });\n    savedOk = response.ok;\n    if (!response.ok) {\n      console.error('Supabase save failed:', response.status);\n    }\n  } catch (e) {\n    console.error('Supabase save error:', e.message);\n  }\n}\n\n// CRITICAL: Return ONLY metadata - NO base64!\nreturn [{\n  json: {\n    pageNumber,\n    caption,\n    moment,\n    environment,\n    cameraAngle,\n    savedToSupabase: savedOk,\n    hasImage: !!imageData,\n    storyId\n  }\n}];"
       },
-      "id": "parse-page-result",
-      "name": "Parse Page Result",
+      "id": "parse-save-strip-page",
+      "name": "Parse + Save + Strip Page",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [5820, 300]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "save-page-check",
-              "leftValue": "={{ $json.saveToSupabase }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "check-save-page",
-      "name": "Save Page?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [5960, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/pages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Prefer",
-              "value": "return=minimal"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"story_id\": {{ JSON.stringify($json.storyId) }},\n  \"page_number\": {{ $json.pageNumber }},\n  \"caption\": {{ JSON.stringify($json.caption || '') }},\n  \"prompt\": {{ JSON.stringify($json.prompt || '') }},\n  \"image_url\": {{ JSON.stringify($json.extractedImageData || '') }},\n  \"status\": \"completed\"\n}",
-        "options": {
-          "timeout": 30000
-        }
-      },
-      "id": "save-page-supabase",
-      "name": "Save Page to DB",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [6100, 200],
+      "position": [5820, 300],
       "credentials": {
         "httpHeaderAuth": {
           "id": "",
           "name": "Supabase Service Key"
         }
       },
-      "onError": "continueErrorOutput"
+      "notes": "MEMORY FIX: Saves to Supabase immediately and returns ONLY metadata (no base64) to prevent memory accumulation in loop"
     },
     {
       "parameters": {
@@ -620,13 +525,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Aggregate all generated pages - MEMORY OPTIMIZED\nconst items = $input.all();\n\nconst allData = $('Prep Page Illustrations').first()?.json?.allData || $('Aggregate Environment References').first().json;\nconst saveToSupabase = allData.saveToSupabase || false;\n\nconst generatedPages = items.map((item, idx) => {\n  const responseBody = item.json.body || item.json;\n  let imageData = null;\n  \n  try {\n    const candidates = responseBody?.candidates || [];\n    for (const candidate of candidates) {\n      const parts = candidate?.content?.parts || [];\n      for (const part of parts) {\n        if (part.inlineData) {\n          imageData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;\n          break;\n        }\n      }\n      if (imageData) break;\n    }\n  } catch (e) {\n    console.error('Error extracting image:', e.message);\n  }\n  \n  // MEMORY OPTIMIZATION: Strip base64 if saved to Supabase\n  const finalImageData = saveToSupabase \n    ? (imageData ? '[SAVED_TO_SUPABASE]' : null)\n    : imageData;\n  \n  return {\n    pageNumber: idx + 1,\n    caption: item.json.page?.caption,\n    moment: item.json.page?.moment,\n    environment: item.json.page?.environment,\n    cameraAngle: item.json.page?.cameraAngle,\n    imageData: finalImageData,\n    prompt: item.json.illustrationPrompt,\n    hasSavedImage: !!imageData && saveToSupabase\n  };\n});\n\n// Slim down output - don't carry storyText forward as it's no longer needed\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    targetAge: allData.targetAge,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    analysis: allData.analysis,\n    styleBible: allData.styleBible,\n    characterReferences: allData.characterReferences,\n    environmentReferences: allData.environmentReferences,\n    storyArcSummary: allData.storyArcSummary,\n    heroImage: allData.heroImage,\n    generatedPages: generatedPages\n  }\n}];"
+        "jsCode": "// Aggregate page metadata - images already saved to Supabase\nconst items = $input.all();\n\nconst allData = $('Prep Page Illustrations').first()?.json?.allData || $('Aggregate Environment References').first().json;\n\n// Items now contain clean metadata (no base64) from Parse + Save + Strip nodes\nconst generatedPages = items.map((item) => {\n  return {\n    pageNumber: item.json.pageNumber,\n    caption: item.json.caption,\n    moment: item.json.moment,\n    environment: item.json.environment,\n    cameraAngle: item.json.cameraAngle,\n    imageData: item.json.savedToSupabase ? '[SAVED_TO_SUPABASE]' : null,\n    savedToSupabase: item.json.savedToSupabase || false\n  };\n});\n\n// No storyText forward - keeping it slim\nreturn [{\n  json: {\n    storyId: allData.storyId,\n    targetAge: allData.targetAge,\n    intensity: allData.intensity,\n    aestheticStyle: allData.aestheticStyle,\n    saveToSupabase: allData.saveToSupabase,\n    analysis: allData.analysis,\n    styleBible: allData.styleBible,\n    characterReferences: allData.characterReferences,\n    environmentReferences: allData.environmentReferences,\n    storyArcSummary: allData.storyArcSummary,\n    heroImage: allData.heroImage,\n    generatedPages: generatedPages\n  }\n}];"
       },
       "id": "aggregate-pages",
       "name": "Aggregate Pages",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [6160, 300]
+      "position": [6260, 300],
+      "notes": "Aggregates page metadata - base64 images already saved to Supabase"
     },
     {
       "parameters": {
@@ -983,43 +889,14 @@
       "main": [
         [
           {
-            "node": "Parse Portrait Result",
+            "node": "Parse + Save + Strip Character",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Portrait Result": {
-      "main": [
-        [
-          {
-            "node": "Save Character?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save Character?": {
-      "main": [
-        [
-          {
-            "node": "Save Character to DB",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Character Rate Limit",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save Character to DB": {
+    "Parse + Save + Strip Character": {
       "main": [
         [
           {
@@ -1082,6 +959,17 @@
       ]
     },
     "Generate Environment Reference": {
+      "main": [
+        [
+          {
+            "node": "Parse + Save + Strip Environment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + Save + Strip Environment": {
       "main": [
         [
           {
@@ -1158,43 +1046,14 @@
       "main": [
         [
           {
-            "node": "Parse Page Result",
+            "node": "Parse + Save + Strip Page",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Page Result": {
-      "main": [
-        [
-          {
-            "node": "Save Page?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save Page?": {
-      "main": [
-        [
-          {
-            "node": "Save Page to DB",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Page Rate Limit",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save Page to DB": {
+    "Parse + Save + Strip Page": {
       "main": [
         [
           {
