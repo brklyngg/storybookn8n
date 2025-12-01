@@ -2,6 +2,131 @@
 
 ---
 
+## Session 10 - November 30, 2025 (Late Night)
+
+### Overview
+Session closure and handoff documentation. Reviewed all work completed during Session 9, identified current blocker, and created comprehensive documentation for next session continuation.
+
+### Work Completed
+
+#### 1. Session Analysis
+- Reviewed commits from Session 9:
+  - `daf2537` - Fixed webhook rawBody issue
+  - `a1dd1be` - Attempted data preservation fix (FAILED)
+- Analyzed current blocker: `$('NodeName')` reference pattern failing in n8n branching logic
+- Identified root cause: n8n HTTP Request nodes don't pass through input data
+
+#### 2. Architecture Comparison Documentation
+- Documented key difference between legacy Next.js app and n8n workflow:
+  - **Legacy:** Client-side orchestration, React state holds all data
+  - **n8n:** Server-side orchestration, data must flow through nodes
+- Noted that HTTP Request nodes only return API response, not input data
+- Clarified that explicit node references (`$('NodeName')`) are required
+
+#### 3. Session Documentation
+- Updated SESSION_SUMMARY.md with Session 10 entry
+- Prepared handoff documentation for next session
+- Created comprehensive context for future debugging
+
+### Current Blocker
+
+**Error:** `Cannot read properties of undefined (reading 'json') [line 3]` in "Continue Pipeline" node
+
+**Root Cause:** The "Continue Pipeline" node tries to reference `$('Save to Supabase?')` IF node, but this reference doesn't work across branching paths in n8n.
+
+**Why the Fix Failed:**
+```javascript
+// This doesn't work in n8n when called from a merged branch:
+const ifNodeData = $('Save to Supabase?').first().json;
+return [{ json: ifNodeData }];
+```
+
+The `$('NodeName')` helper can't reach back through a branch that wasn't executed in the current execution path.
+
+### Recommended Solution
+
+Convert "7. Save to Supabase" from HTTP Request node to a Code node that:
+1. Makes the HTTP request to Supabase
+2. Returns the ORIGINAL input data, not the Supabase response
+3. Optionally adds Supabase response metadata
+
+Example implementation:
+```javascript
+const inputData = $input.first().json;
+
+// Make Supabase HTTP request
+const response = await fetch('https://...', {
+  method: 'POST',
+  headers: { 'apikey': '...' },
+  body: JSON.stringify(inputData)
+});
+
+// Return original data, not Supabase response
+return {
+  json: {
+    ...inputData,
+    supabaseResponse: await response.json()
+  }
+};
+```
+
+### Feature Request Identified
+
+**Real-time Granular Progress Updates:**
+- Current: Frontend shows fake 8-second timer with generic steps
+- Requested: SUPER GRANULAR real-time progress showing exactly what's happening
+- Suggested implementation: Supabase real-time subscriptions with status updates
+
+### Files Modified
+- `/Users/garygurevich/Documents/Vibe Coding/N8N Storybook Generator/SESSION_SUMMARY.md` (this file)
+
+### Technical Insights
+
+**n8n Branching Limitations:**
+- Nodes cannot reference nodes from unexecuted branches
+- IF node creates two execution paths (true/false)
+- "Continue Pipeline" merges these paths but can't reach back to the IF node
+- Must preserve data THROUGH the HTTP node, not reference around it
+
+**Workflow Anti-Pattern:**
+```
+IF Node → HTTP Request (loses data) → Merge Node (tries to reference IF)
+```
+
+**Correct Pattern:**
+```
+IF Node → Code Node (preserves data) → Merge Node (uses Code node output)
+```
+
+### Project State
+
+**Working:**
+- Webhook receives data correctly (rawBody issue fixed)
+- Data flows through story analyzer, scene selector, character extractor
+- Character portraits and environments are being generated
+
+**Broken:**
+- Workflow crashes at "Continue Pipeline" after Supabase save
+- Pages are never generated due to crash
+- Frontend never receives a response
+
+**Next Steps Priority:**
+1. Fix data preservation in "7. Save to Supabase" (convert to Code node)
+2. Test complete workflow end-to-end
+3. Implement real-time progress updates via Supabase
+
+### Session Duration
+Approximately 30 minutes (review + documentation)
+
+### Notes
+
+- Git working tree is clean (all changes committed in Session 9)
+- Latest commit: `a1dd1be` contains the failed fix attempt
+- Project location: `/Users/garygurevich/Documents/Vibe Coding/N8N Storybook Generator`
+- Remote: github.com/brklyngg/storybookn8n
+
+---
+
 ## Session 9 - December 1, 2025 (Early Morning)
 
 ### Overview

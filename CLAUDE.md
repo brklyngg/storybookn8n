@@ -109,6 +109,42 @@ This approach was chosen over the LangChain Gemini node because:
 3. Image generation requires specific `responseModalities` configuration
 4. Better error handling and response parsing
 
+### Critical n8n Data Flow Rules
+
+**HTTP Request Node Behavior:**
+- HTTP Request nodes return ONLY the API response
+- Original input data is NOT passed through automatically
+- If you need to preserve input data, use a Code node instead
+
+**Known Issue - Data Loss Pattern:**
+```javascript
+// ANTI-PATTERN (causes data loss):
+IF Node → HTTP Request (returns API response only) → Merge Node (no data!)
+
+// CORRECT PATTERN:
+IF Node → Code Node (makes HTTP request + returns input data) → Merge Node ✓
+```
+
+**Example Fix for Supabase Save:**
+```javascript
+// Instead of HTTP Request node, use Code node:
+const inputData = $input.first().json;
+
+const response = await fetch('https://supabase.co/rest/v1/table', {
+  method: 'POST',
+  headers: { 'apikey': 'key' },
+  body: JSON.stringify(inputData)
+});
+
+// Return original data, not API response
+return { json: { ...inputData, saved: response.ok } };
+```
+
+**Node Reference Limitations:**
+- Cannot use `$('NodeName')` to reference nodes from unexecuted branches
+- IF nodes create separate execution paths
+- Merge nodes can only access data from their connected inputs, not upstream nodes
+
 ## Supabase Database Schema
 
 | Table | Purpose |
