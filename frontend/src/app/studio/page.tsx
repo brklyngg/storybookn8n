@@ -6,7 +6,7 @@ import {
   BookOpen, ChevronLeft, Loader2, AlertTriangle,
   RefreshCw, Download, Eye, CheckCircle2
 } from 'lucide-react';
-import { fetchPageImages, fetchCharacterImages } from '@/lib/supabase';
+import { fetchPageImages, fetchCharacterImages, pollStoryStatus } from '@/lib/supabase';
 
 // Types
 interface StoryPage {
@@ -73,30 +73,10 @@ function StudioContent() {
     setError(null);
 
     try {
-      // Show progress updates
-      const steps = [
-        'Analyzing story structure...',
-        'Selecting key scenes...',
-        'Writing captions...',
-        'Extracting characters...',
-        'Creating style bible...',
-        'Generating character portraits...',
-        'Illustrating pages...',
-        'Reviewing for consistency...',
-        'Finalizing...'
-      ];
-
-      let stepIndex = 0;
-      const progressInterval = setInterval(() => {
-        if (stepIndex < steps.length) {
-          setCurrentStep(steps[stepIndex]);
-          stepIndex++;
-        }
-      }, 8000); // Update every 8 seconds
-
-      // TEMPORARY: Call n8n directly while we fix the Edge Function flow
-      // TODO: Switch back to Edge Function once n8n workflow is properly configured
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      // Trigger n8n workflow (fire and forget - don't wait for response)
+      setCurrentStep('Starting workflow...');
+      
+      fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -106,15 +86,47 @@ function StudioContent() {
           storyText: data.storyText,
           settings: data.settings,
         }),
+      }).catch(err => {
+        // Ignore timeout errors - workflow continues in background
+        console.log('Workflow started (response may have timed out, but workflow continues)');
       });
 
-      clearInterval(progressInterval);
+      // Poll Supabase for completion status
+      setCurrentStep('Workflow running...');
+      
+      const pollResult = await pollStoryStatus(
+        data.storyId,
+        (status, step) => {
+          // Update progress based on workflow step
+          const stepMessages: Record<string, string> = {
+            'characters': 'Extracting characters...',
+            'portraits': 'Generating character portraits...',
+            'environments': 'Creating environment references...',
+            'pages': 'Illustrating pages...',
+            'consistency': 'Reviewing for consistency...',
+            'fixing': 'Fixing inconsistencies...',
+            'finalizing': 'Finalizing...'
+          };
+          setCurrentStep(stepMessages[step] || step);
+        }
+      );
 
-      if (!response.ok) {
-        throw new Error(`n8n workflow failed: ${response.statusText}`);
+      if (pollResult === 'timeout') {
+        throw new Error('Story generation timed out after 20 minutes');
       }
 
-      const result = await response.json();
+      if (pollResult === 'error') {
+        throw new Error('Story generation failed');
+      }
+
+      // Fetch completed results from Supabase
+      setCurrentStep('Loading generated content...');
+      
+      const result: any = {
+        success: true,
+        storyId: data.storyId,
+        metadata: { savedToSupabase: true }
+      };
 
       // If images were saved to Supabase, fetch them
       if (result.metadata?.savedToSupabase) {

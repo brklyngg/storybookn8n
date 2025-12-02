@@ -184,3 +184,55 @@ export async function fetchEnvironmentImages(storyId: string): Promise<Environme
 
   return data || [];
 }
+
+// Poll story status until completion
+export async function pollStoryStatus(
+  storyId: string,
+  onProgress?: (status: string, step: string) => void,
+  maxAttempts: number = 240 // 20 minutes at 5s intervals
+): Promise<'completed' | 'error' | 'timeout'> {
+  if (!supabase) {
+    console.warn('Supabase not configured');
+    return 'error';
+  }
+
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    const { data, error } = await supabase
+      .from('stories')
+      .select('status, current_step')
+      .eq('id', storyId)
+      .single();
+
+    if (error) {
+      console.error('Error polling story status:', error);
+      return 'error';
+    }
+
+    if (data) {
+      const status = data.status || 'generating';
+      const step = data.current_step || 'processing';
+
+      // Notify progress
+      if (onProgress) {
+        onProgress(status, step);
+      }
+
+      // Check completion
+      if (status === 'completed') {
+        return 'completed';
+      }
+
+      if (status === 'error' || status === 'failed') {
+        return 'error';
+      }
+    }
+
+    // Wait 5 seconds before next check
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    attempts++;
+  }
+
+  return 'timeout';
+}
