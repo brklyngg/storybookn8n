@@ -94,14 +94,12 @@ function StudioContent() {
         }
       }, 8000); // Update every 8 seconds
 
-      // Call Supabase Edge Function (which saves story and calls n8n)
-      const SUPABASE_FUNCTION_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/story-intake`;
-      
-      const response = await fetch(SUPABASE_FUNCTION_URL, {
+      // TEMPORARY: Call n8n directly while we fix the Edge Function flow
+      // TODO: Switch back to Edge Function once n8n workflow is properly configured
+      const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({
           storyId: data.storyId,
