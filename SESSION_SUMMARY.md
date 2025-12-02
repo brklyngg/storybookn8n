@@ -2,6 +2,91 @@
 
 ---
 
+## Session 13 - December 2, 2025
+
+### Overview
+Implemented polling approach to fix frontend timeout issue. After fixing the n8n workflow crash (Session 12), discovered that frontend was timing out after 30-60 seconds while waiting for the workflow response, even though the workflow itself was running successfully for 12-20 minutes.
+
+### The Problem
+
+**User Report:** Frontend showing "Failed to fetch" error, but n8n execution shows workflow still running successfully for 4+ minutes.
+
+**Root Cause:**
+- Frontend's `fetch()` call waits for entire workflow to complete (12-20 minutes)
+- Browser has default timeout of 30-60 seconds
+- HTTP request times out before workflow finishes
+- Workflow continues running successfully in background, but frontend shows error
+
+### The Solution
+
+**Polling Architecture:**
+1. Frontend triggers n8n webhook without waiting for response (fire-and-forget)
+2. Frontend polls Supabase every 5 seconds to check story status
+3. When status changes to 'completed', frontend fetches results from Supabase
+4. Progress updates shown based on `current_step` field in database
+
+**Files Changed:**
+
+1. **`frontend/src/lib/supabase.ts`**
+   - Added `pollStoryStatus()` function
+   - Polls every 5 seconds for up to 20 minutes (240 attempts)
+   - Accepts progress callback to update UI
+   - Returns 'completed', 'error', or 'timeout'
+
+2. **`frontend/src/app/studio/page.tsx`**
+   - Modified `startGeneration()` to use polling instead of waiting
+   - Triggers n8n webhook with `.catch()` to ignore timeout errors
+   - Calls `pollStoryStatus()` to monitor progress
+   - Fetches results from Supabase when complete
+
+3. **`workflows/storybook-generator.json`**
+   - Added "Mark Story Complete" node between "Build Final Response" and "Webhook Response"
+   - Updates Supabase with `status: 'completed'` and `current_step: 'done'` when workflow finishes
+   - Ensures frontend polling can detect completion
+
+### Key Implementation Details
+
+**Polling Function:**
+```typescript
+export async function pollStoryStatus(
+  storyId: string,
+  onProgress?: (status: string, step: string) => void,
+  maxAttempts: number = 240 // 20 minutes at 5s intervals
+): Promise<'completed' | 'error' | 'timeout'>
+```
+
+**Progress Updates:**
+Frontend shows different messages based on `current_step` from database:
+- 'characters' → "Extracting characters..."
+- 'portraits' → "Generating character portraits..."
+- 'environments' → "Creating environment references..."
+- 'pages' → "Illustrating pages..."
+- 'consistency' → "Reviewing for consistency..."
+- 'done' → "Finalizing..."
+
+### Benefits
+
+1. **No More Timeouts:** Frontend doesn't wait for long-running workflow
+2. **Real Progress:** Can show actual workflow progress from database
+3. **Better UX:** User sees updates every 5 seconds instead of spinner for 20 minutes
+4. **Fault Tolerant:** If frontend crashes, can reload and resume polling with same storyId
+5. **Scalable:** Works for workflows of any duration
+
+### Testing Status
+
+- ✅ Code committed and pushed
+- ⏳ **Needs user testing:** Re-import updated workflow JSON to n8n Cloud
+- ⏳ **Needs user testing:** Try generating a story (especially Beowulf) to verify polling works
+
+### Next Steps
+
+1. User needs to re-import `workflows/storybook-generator.json` into n8n Cloud
+2. Test with large story to verify no timeout errors
+3. Monitor that "Mark Story Complete" node properly updates status
+4. Consider adding more granular `current_step` updates throughout workflow for better progress tracking
+
+---
+
 ## Session 12 - December 2, 2025
 
 ### Overview

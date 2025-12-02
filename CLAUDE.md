@@ -19,14 +19,38 @@ AI-powered children's picture book generator using **n8n Cloud workflows** as th
 ## Architecture
 
 ```
-[Next.js Frontend] → [n8n Cloud Webhook] → [HTTP Request Pipeline] → [JSON Response]
-        ↓
-   [Supabase Stories Library]
+[Next.js Frontend] → [n8n Cloud Webhook (fire & forget)]
+        ↓                         ↓
+   [Poll Supabase]     [HTTP Request Pipeline (12-20 min)]
+        ↓                         ↓
+[Fetch Results] ← [Mark Complete] ← [Generate Images]
 ```
 
-**Frontend:** Next.js 15 app in `/frontend` that collects story input and settings, then calls the n8n webhook. Includes a Story Library dropdown that loads stories from Supabase.
+**Frontend:** Next.js 15 app in `/frontend` that:
+1. Triggers n8n webhook without waiting for response
+2. Polls Supabase every 5 seconds to check story status
+3. Fetches generated content when status changes to 'completed'
+4. Includes Story Library dropdown that loads pre-existing stories
 
-**Backend:** n8n workflow (`workflows/storybook-generator.json`) using native HTTP Request nodes to call Gemini API directly.
+**Backend:** n8n workflow (`workflows/storybook-generator.json`) using native HTTP Request nodes to call Gemini API directly. Runs for 12-20 minutes, saves all content to Supabase, then marks story as complete.
+
+**Why Polling?** The workflow takes 12-20 minutes to complete, but browser `fetch()` timeouts occur after 30-60 seconds. Polling allows the frontend to stay responsive while the workflow runs in the background.
+
+### How It Works
+
+1. **User Inputs Story** - Enter story text, choose age/style settings, optionally upload hero photo
+2. **Frontend Triggers Workflow** - Sends data to n8n webhook and immediately starts polling
+3. **Workflow Saves Initial Record** - Creates database entry with status='generating'
+4. **AI Analysis** - Gemini reads the story and identifies key plot points, characters, and locations
+5. **Character References** - Generates portrait images for main characters with consistent style rules
+6. **Environment References** - Creates reference images for recurring locations (forest, castle, etc.)
+7. **Page Illustrations** - Generates 5-10 illustrated pages using character/environment references
+8. **Consistency Check** - Reviews all images for visual consistency, regenerates if needed
+9. **Mark Complete** - Updates database with status='completed'
+10. **Frontend Detects Completion** - Polling finds completed status, fetches images from database
+11. **Display Book** - Shows illustrated storybook with navigation controls
+
+**Total Time:** 12-20 minutes depending on page count. Frontend shows progress updates every 5 seconds.
 
 ### Pipeline Steps
 
@@ -47,7 +71,8 @@ AI-powered children's picture book generator using **n8n Cloud workflows** as th
 12. **Consistency Reviewer** - Checks for visual consistency issues
 13. **Consistency Fixer Loop** - Regenerates inconsistent pages (max 3 per run)
 14. **Build Final Response** - Assembles complete book data
-15. **Webhook Response** - Returns JSON to frontend
+15. **Mark Story Complete** - Updates Supabase with status='completed' for frontend polling
+16. **Webhook Response** - Returns JSON to frontend (may timeout, but workflow completes)
 
 ## AI Models (Gemini API)
 
