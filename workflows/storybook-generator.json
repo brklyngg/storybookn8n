@@ -34,6 +34,20 @@
     },
     {
       "parameters": {
+        "jsCode": "// Create story record in Supabase IMMEDIATELY so frontend can start polling\nconst data = $input.first().json;\n\n// Hardcoded Supabase service key (same as other nodes)\nconst supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpudnFxbnJ3dXpqdGRncWxrZ3ZmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDAyNTgyMSwiZXhwIjoyMDc5NjAxODIxfQ.IWZV4x0vHZxBZAhOFKkwbB9LgZf8vk9e15MxBHhYxYU';\n\ntry {\n  const response = await fetch('https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'apikey': supabaseServiceKey,\n      'Authorization': `Bearer ${supabaseServiceKey}`,\n      'Prefer': 'resolution=merge-duplicates'\n    },\n    body: JSON.stringify({\n      id: data.storyId,\n      source_text: (data.storyText || '').substring(0, 10000),\n      settings: data.settings,\n      title: 'Generating...',\n      status: 'generating',\n      current_step: 'analyzing'\n    })\n  });\n  \n  if (!response.ok) {\n    console.error('Initial Supabase save failed:', response.status, await response.text());\n  } else {\n    console.log('Story record created:', data.storyId);\n  }\n} catch (e) {\n  console.error('Initial Supabase save error:', e.message);\n}\n\n// Return original data to continue pipeline\nreturn [{ json: data }];"
+      },
+      "id": "create-story-record",
+      "name": "Create Story Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        300
+      ],
+      "notes": "CRITICAL: Creates story record IMMEDIATELY so frontend polling works even if workflow fails later"
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent",
         "authentication": "genericCredentialType",
@@ -244,7 +258,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Save story to Supabase AND return original data (not API response)\n// This fixes the data flow issue where HTTP Request loses input data\nconst data = $input.first().json;\n\ntry {\n  const response = await fetch('https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'apikey': $credentials.httpHeaderAuth.value,\n      'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n      'Prefer': 'resolution=merge-duplicates'\n    },\n    body: JSON.stringify({\n      id: data.storyId,\n      source_text: (data.storyText || '').substring(0, 10000),\n      settings: data.settings,\n      theme: data.analysis?.theme || '',\n      title: data.analysis?.title || 'Untitled',\n      status: 'generating',\n      current_step: 'characters'\n    })\n  });\n  \n  if (!response.ok) {\n    console.error('Supabase save failed:', response.status);\n  }\n} catch (e) {\n  console.error('Supabase save error:', e.message);\n}\n\n// CRITICAL: Return original data, not API response\nreturn [{ json: data }];"
+        "jsCode": "// Update story in Supabase with analysis results and advance step\nconst data = $input.first().json;\n\ntry {\n  const response = await fetch('https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      'apikey': $credentials.httpHeaderAuth.value,\n      'Authorization': `Bearer ${$credentials.httpHeaderAuth.value}`,\n      'Prefer': 'resolution=merge-duplicates'\n    },\n    body: JSON.stringify({\n      id: data.storyId,\n      source_text: (data.storyText || '').substring(0, 10000),\n      settings: data.settings,\n      theme: data.analysis?.theme || '',\n      title: data.analysis?.title || 'Untitled',\n      status: 'generating',\n      current_step: 'portraits'\n    })\n  });\n  \n  if (!response.ok) {\n    console.error('Supabase save failed:', response.status);\n  }\n} catch (e) {\n  console.error('Supabase save error:', e.message);\n}\n\n// CRITICAL: Return original data, not API response\nreturn [{ json: data }];"
       },
       "id": "aa491d2f-748d-4527-bae5-4579c32924ca",
       "name": "7. Save to Supabase",
@@ -842,6 +856,17 @@
       ]
     },
     "Extract & Validate Inputs": {
+      "main": [
+        [
+          {
+            "node": "Create Story Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Story Record": {
       "main": [
         [
           {

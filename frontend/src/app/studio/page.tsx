@@ -6,7 +6,7 @@ import {
   BookOpen, ChevronLeft, Loader2, AlertTriangle,
   RefreshCw, Download, Eye, CheckCircle2
 } from 'lucide-react';
-import { fetchPageImages, fetchCharacterImages, pollStoryStatus } from '@/lib/supabase';
+import { fetchPageImages, fetchCharacterImages, fetchStoryById, pollStoryStatus } from '@/lib/supabase';
 
 // Types
 interface StoryPage {
@@ -99,13 +99,16 @@ function StudioContent() {
         (status, step) => {
           // Update progress based on workflow step
           const stepMessages: Record<string, string> = {
+            'initializing': 'Waiting for workflow to start...',
+            'analyzing': 'Analyzing story structure...',
             'characters': 'Extracting characters...',
             'portraits': 'Generating character portraits...',
             'environments': 'Creating environment references...',
             'pages': 'Illustrating pages...',
             'consistency': 'Reviewing for consistency...',
             'fixing': 'Fixing inconsistencies...',
-            'finalizing': 'Finalizing...'
+            'finalizing': 'Finalizing...',
+            'done': 'Complete!'
           };
           setCurrentStep(stepMessages[step] || step);
         }
@@ -121,41 +124,48 @@ function StudioContent() {
 
       // Fetch completed results from Supabase
       setCurrentStep('Loading generated content...');
-      
-      const result: any = {
+
+      // Fetch story metadata, page images, and character images in parallel
+      const [storyData, pageImages, charImages] = await Promise.all([
+        fetchStoryById(data.storyId),
+        fetchPageImages(data.storyId),
+        fetchCharacterImages(data.storyId)
+      ]);
+
+      // Build pages array from Supabase data
+      const pages: StoryPage[] = pageImages.map(p => ({
+        pageNumber: p.page_number,
+        caption: p.caption || '',
+        imageData: p.image_url,
+        savedToSupabase: true
+      }));
+
+      // Build characters array from Supabase data
+      const characters: Character[] = charImages.map(c => ({
+        name: c.name,
+        role: c.role,
+        description: '',
+        referenceImage: c.reference_image,
+        savedToSupabase: true
+      }));
+
+      // Build the result object using Supabase data
+      const result: GenerationResult = {
         success: true,
         storyId: data.storyId,
-        metadata: { savedToSupabase: true }
+        title: storyData?.title || data.fileName || 'Your Story',
+        theme: storyData?.theme || 'Adventure',
+        storyArcSummary: ['Story generated successfully'],
+        pages,
+        characters,
+        metadata: {
+          pageCount: pages.length,
+          characterCount: characters.length,
+          consistencyIssuesFound: 0,
+          pagesFixed: 0,
+          savedToSupabase: true
+        }
       };
-
-      // If images were saved to Supabase, fetch them
-      if (result.metadata?.savedToSupabase) {
-        setCurrentStep('Fetching images from database...');
-
-        // Fetch page images
-        const pageImages = await fetchPageImages(result.storyId);
-        if (pageImages.length > 0) {
-          result.pages = result.pages.map((page: StoryPage) => {
-            const dbPage = pageImages.find(p => p.page_number === page.pageNumber);
-            if (dbPage && dbPage.image_url) {
-              return { ...page, imageData: dbPage.image_url };
-            }
-            return page;
-          });
-        }
-
-        // Fetch character images
-        const charImages = await fetchCharacterImages(result.storyId);
-        if (charImages.length > 0) {
-          result.characters = result.characters.map((char: Character) => {
-            const dbChar = charImages.find(c => c.name === char.name);
-            if (dbChar && dbChar.reference_image) {
-              return { ...char, referenceImage: dbChar.reference_image };
-            }
-            return char;
-          });
-        }
-      }
 
       setResult(result);
       setStatus('complete');
