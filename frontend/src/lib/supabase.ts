@@ -205,9 +205,20 @@ export async function pollStoryStatus(
       .eq('id', storyId)
       .single();
 
-    if (error) {
+    // If record doesn't exist yet, keep retrying (workflow hasn't saved it yet)
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 = "no rows returned" - this is expected initially
+      // Other errors are genuine problems
       console.error('Error polling story status:', error);
       return 'error';
+    }
+
+    // If no data yet, show "waiting for workflow to start" message
+    if (!data && attempts < 12) {
+      // First minute: waiting for workflow to initialize
+      if (onProgress) {
+        onProgress('initializing', 'Waiting for workflow to start...');
+      }
     }
 
     if (data) {
