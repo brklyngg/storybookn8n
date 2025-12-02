@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// LIGHTWEIGHT WEBHOOK: Fetch story from Supabase instead of receiving in payload\n// This fixes n8n Cloud crashes with large story texts\nconst input = $input.first().json;\nconst body = input.body || input;\n\nconst storyId = body.storyId;\nconst settings = body.settings || {};\n\n// Fetch full story text from Supabase (not from webhook payload)\nlet storyText = '';\ntry {\n  const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpudnFxbnJ3dXpqdGRncWxrZ3ZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwMjU4MjEsImV4cCI6MjA3OTYwMTgyMX0.H00iMCd0pEcq5W_hkVlIaJgqvfXRLKkLgV5XjfINhzM';\n  const response = await fetch(\n    `https://znvqqnrwuzjtdgqlkgvf.supabase.co/rest/v1/stories?id=eq.${storyId}&select=source_text`,\n    {\n      headers: {\n        'apikey': supabaseAnonKey,\n        'Authorization': `Bearer ${supabaseAnonKey}`\n      }\n    }\n  );\n  const data = await response.json();\n  storyText = data[0]?.source_text || '';\n  console.log('Fetched story from Supabase:', storyText.substring(0, 100) + '...');\n} catch (e) {\n  console.error('Failed to fetch story from Supabase:', e.message);\n  // Fallback to webhook payload if fetch fails\n  storyText = body.storyText || '';\n}\n\n// Hero image support - base64 encoded custom protagonist photo\nconst heroImage = settings.heroImage || body.heroImage || null;\n\nreturn [{\n  json: {\n    storyText,\n    settings,\n    storyId: storyId || crypto.randomUUID(),\n    targetAge: settings.targetAge || 6,\n    desiredPageCount: settings.desiredPageCount || 10,\n    intensity: settings.harshness || 5,\n    aestheticStyle: settings.aestheticStyle || 'watercolor children\\'s book illustration',\n    freeformNotes: settings.freeformNotes || '',\n    saveToSupabase: true,\n    heroImage: heroImage\n  }\n}];"
+        "jsCode": "// Direct webhook payload processing - simplified for reliability\nconst input = $input.first().json;\nconst body = input.body || input;\nconst storyText = body.storyText || '';\nconst settings = body.settings || {};\nconst storyId = body.storyId || crypto.randomUUID();\n\n// Hero image support - base64 encoded custom protagonist photo\nconst heroImage = settings.heroImage || body.heroImage || null;\n\nreturn [{\n  json: {\n    storyText,\n    settings,\n    storyId,\n    targetAge: settings.targetAge || 6,\n    desiredPageCount: settings.desiredPageCount || 10,\n    intensity: settings.harshness || 5,\n    aestheticStyle: settings.aestheticStyle || 'watercolor children\\'s book illustration',\n    freeformNotes: settings.freeformNotes || '',\n    saveToSupabase: true,\n    heroImage: heroImage\n  }\n}];"
       },
       "id": "0a155b51-edb0-4ce1-a581-143b8be1d537",
       "name": "Extract & Validate Inputs",
@@ -30,7 +30,7 @@
         220,
         300
       ],
-      "notes": "MEMORY FIX: Fetches story from Supabase instead of webhook payload to handle any story size"
+      "notes": "SIMPLIFIED: Uses webhook payload directly - no external fetch calls"
     },
     {
       "parameters": {

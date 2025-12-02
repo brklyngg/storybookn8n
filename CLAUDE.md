@@ -31,25 +31,23 @@ AI-powered children's picture book generator using **n8n Cloud workflows** as th
 ### Pipeline Steps
 
 1. **Webhook Input** - Receives POST with storyText, settings, heroImage
-2. **Story Analyzer** - Gemini analyzes narrative structure + identifies key environments
-3. **Scene Selector** - Chooses scenes, assigns camera angles and environments
-4. **Caption Writer** - Writes age-appropriate captions
-5. **Character Extractor** - Identifies characters, marks protagonist as hero
-6. **Parse Characters & Create Style Bible** - Builds style rules, extracts environment list
-7. **Save Story to Supabase** - Conditional branch for database storage (optional)
-8. **Character Portrait Loop** - Generates portraits for main/supporting characters
-   - **Parse Portrait Result** - Extracts image from Gemini response
-   - **Save Character?** - Conditional check for saveToSupabase flag
-   - **Save Character to DB** - Saves character to `characters` table
-8b. **Environment Reference Loop** - Generates reference images for recurring locations
-9. **Page Illustrator Loop** - Generates page illustrations
-   - **Parse Page Result** - Extracts image from Gemini response
-   - **Save Page?** - Conditional check for saveToSupabase flag
-   - **Save Page to DB** - Saves page to `pages` table
-10. **Consistency Reviewer** - Checks for visual consistency issues
-11. **Consistency Fixer Loop** - Regenerates inconsistent pages (max 3 per run)
-12. **Build Final Response** - Assembles complete book data
-13. **Webhook Response** - Returns JSON to frontend
+2. **Extract & Validate Inputs** - Processes webhook payload directly (no external fetches)
+3. **Story Analyzer** - Gemini analyzes narrative structure + identifies key environments
+4. **Scene Selector** - Chooses scenes, assigns camera angles and environments
+5. **Caption Writer** - Writes age-appropriate captions
+6. **Character Extractor** - Identifies characters, marks protagonist as hero
+7. **Parse Characters & Create Style Bible** - Builds style rules, extracts environment list
+8. **Save Story to Supabase** - Conditional branch for database storage (optional)
+9. **Character Portrait Loop** - Generates portraits for main/supporting characters
+   - **Parse + Save + Strip Character** - Extracts image, saves to Supabase, returns metadata only
+10. **Environment Reference Loop** - Generates reference images for recurring locations
+   - **Parse + Save + Strip Environment** - Extracts image, saves to Supabase, returns metadata only
+11. **Page Illustrator Loop** - Generates page illustrations
+   - **Parse + Save + Strip Page** - Extracts image, saves to Supabase, returns metadata only
+12. **Consistency Reviewer** - Checks for visual consistency issues
+13. **Consistency Fixer Loop** - Regenerates inconsistent pages (max 3 per run)
+14. **Build Final Response** - Assembles complete book data
+15. **Webhook Response** - Returns JSON to frontend
 
 ## AI Models (Gemini API)
 
@@ -227,14 +225,14 @@ The Gemini API requires the API key as a URL query parameter (`?key=...`). n8n a
 - **Parameter Value:** Your API key from [Google AI Studio](https://aistudio.google.com/apikey)
 
 **Nodes requiring this credential (9 total):**
-1. 2. Story Analyzer
-2. 3. Scene Selector
-3. 4. Caption Writer
-4. 5. Character Extractor
+1. Story Analyzer
+2. Scene Selector
+3. Caption Writer
+4. Character Extractor
 5. Generate Portrait
 6. Generate Environment Reference
 7. Generate Page Image
-8. 10. Consistency Reviewer
+8. Consistency Reviewer
 9. Regenerate Page
 
 #### 2. Supabase Service Key (Header Auth)
@@ -246,10 +244,10 @@ The Supabase REST API requires the API key as a header (`apikey: ...`). n8n auto
 - **Header Value:** Your service_role key from Supabase Dashboard > Settings > API
 
 **Nodes requiring this credential (4 total):**
-1. 7. Save Story to Supabase
-2. Save Character to DB
-3. Save Environment to DB
-4. Save Page to DB
+1. Save Story to Supabase (Code node)
+2. Parse + Save + Strip Character (Code node)
+3. Parse + Save + Strip Environment (Code node)
+4. Parse + Save + Strip Page (Code node)
 
 > **Note:** The workflow uses Query Auth for Gemini (URL parameter) and Header Auth for Supabase (HTTP header). n8n automatically injects these credentials - no manual expression references needed.
 
